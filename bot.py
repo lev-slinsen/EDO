@@ -14,7 +14,7 @@ load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
 DEBUG = os.getenv('DEBUG')
 
-bot = commands.Bot(command_prefix='')
+bot = commands.Bot(command_prefix='!')
 
 
 """

@@ -1,9 +1,6 @@
 import os
 import requests
 import json
-import asyncio
-import time
-import math
 import datetime
 
 from dotenv import load_dotenv
@@ -15,7 +12,6 @@ DEBUG = os.getenv('DEBUG')
 
 req_faction = FACTION_NAME.replace(' ', '%20')
 req_uri = 'https://elitebgs.app/api/ebgs/v4/'
-report = ''
 
 
 def faction_update():
@@ -23,18 +19,20 @@ def faction_update():
     return faction_json
 
 
+# Stores data from faction_json as a variable
 faction_json_stash = faction_update()
 faction_json_data = json.loads(faction_json_stash.text)
 
+if not faction_json_data['docs']:
+    with open('err.log', 'a+') as err_log:
+        print(f'{datetime.datetime.now()}, Bad faction name: {req_faction}')
+        err_log.write(f'{datetime.datetime.now()}, Bad faction name: {req_faction}')
+
 
 def conflicts_active():
+    # How I check for active conflicts
     if DEBUG:
         print(f'"Faction" reply: {faction_json_data}')
-
-    if not faction_json_data['docs']:
-        with open('err.log', 'a+') as err_log:
-            print(f'{datetime.datetime.now()}, Bad faction name: {req_faction}')
-            err_log.write(f'{datetime.datetime.now()}, Bad faction name: {req_faction}')
 
     conflicts_active_report = {}
     n = 1
