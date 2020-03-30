@@ -23,12 +23,14 @@ def faction_update():
     return faction_json
 
 
-faction_json_data = faction_update()
-if DEBUG:
-    print(f'"Faction" reply: {faction_json_data}')
+faction_json_stash = faction_update()
+faction_json_data = json.loads(faction_json_stash.text)
 
 
 def conflicts():
+    if DEBUG:
+        print(f'"Faction" reply: {faction_json_data}')
+
     if not faction_json_data['docs']:
         with open('err.log', 'a+') as err_log:
             print(f'{datetime.datetime.now()}, Bad faction name: {req_faction}')
