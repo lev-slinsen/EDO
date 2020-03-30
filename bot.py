@@ -7,7 +7,7 @@ from discord.ext import commands
 from discord.ext.commands import CommandNotFound
 from dotenv import load_dotenv
 
-from eddb_api import faction_update, conflicts
+from eddb_api import faction_update, conflicts_active
 
 load_dotenv()
 # All environment variables are stored in '.env' file
@@ -30,7 +30,7 @@ async def on_ready():
         print(f'"{guild.name}" with id: {guild.id}\n')
     while True:
         faction_update()
-        print(conflicts())
+        print(conflicts_active())
         time.sleep(3600)
 
 

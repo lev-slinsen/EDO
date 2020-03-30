@@ -9,13 +9,13 @@ import datetime
 from dotenv import load_dotenv
 
 load_dotenv()
-
 FACTION_ID = os.getenv('FACTION_ID')
 FACTION_NAME = os.getenv('FACTION_NAME').lower()
 DEBUG = os.getenv('DEBUG')
 
 req_faction = FACTION_NAME.replace(' ', '%20')
 req_uri = 'https://elitebgs.app/api/ebgs/v4/'
+report = ''
 
 
 def faction_update():
@@ -27,7 +27,7 @@ faction_json_stash = faction_update()
 faction_json_data = json.loads(faction_json_stash.text)
 
 
-def conflicts():
+def conflicts_active():
     if DEBUG:
         print(f'"Faction" reply: {faction_json_data}')
 
@@ -36,6 +36,7 @@ def conflicts():
             print(f'{datetime.datetime.now()}, Bad faction name: {req_faction}')
             err_log.write(f'{datetime.datetime.now()}, Bad faction name: {req_faction}')
 
+    conflicts_active_report = {}
     n = 1
     for system in faction_json_data['docs'][0]['faction_presence']:
         if DEBUG:
@@ -64,14 +65,16 @@ def conflicts():
                                     conflict['faction2']['name_lower'] == FACTION_NAME
                             )
                     ):
-                        print(conflict['status'])
-
-        for recovering_state in system['recovering_states']:
-            pass
-
-        for pending_state in system['pending_states']:
-            pass
-
+                        conflicts_active_report.update(
+                            {
+                                system['system_name_lower']: {
+                                    'state': active_state['state'],
+                                    conflict['faction1']['name_lower']: conflict['faction1']['days_won'],
+                                    conflict['faction2']['name_lower']: conflict['faction2']['days_won']
+                                }
+                            }
+                        )
+    return conflicts_active_report
 
 
 
