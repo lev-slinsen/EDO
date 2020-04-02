@@ -1,25 +1,20 @@
 import os
 import datetime
 import asyncio
-import time
 
 from discord.ext import commands
 from discord.ext.commands import CommandNotFound
 from dotenv import load_dotenv
 
-from eddb_api import faction_update, conflicts_active
+from eddb_api import Cache
 
 load_dotenv()
 # All environment variables are stored in '.env' file
 TOKEN = os.getenv('DISCORD_TOKEN')
 DEBUG = os.getenv('DEBUG')
+FACTION_NAME = os.getenv('FACTION_NAME')
 
 bot = commands.Bot(command_prefix='!')
-
-
-"""
-EVENTS
-"""
 
 
 @bot.event
@@ -29,14 +24,38 @@ async def on_ready():
     for guild in bot.guilds:
         print(f'"{guild.name}" with id: {guild.id}\n')
     while True:
-        faction_update()
-        print(conflicts_active())
-        time.sleep(3600)
+        global cache
+        cache = Cache()
+        await asyncio.sleep(3600)
 
 
-"""
-ERRORS
-"""
+@bot.command(name='active', help='Shows active conflicts')
+async def conflicts_active_cmd(ctx):
+    # reply = ''
+    if len(cache.conflicts_active) == 0:
+        await ctx.send(f'Our kingdom is at peace!')
+        return
+    else:
+        reply = f'Active conflicts: {len(cache.conflicts_active)}'
+        for idx, conflict in enumerate(cache.conflicts_active):
+            conflict_id = conflict
+            details = cache.conflicts_active[conflict]
+            system = details['system']
+            state = details['state']
+            enemy = details['enemy']
+            score = details['score']
+            win = details['win']
+            if win is None:
+                win = 'Nothing'
+            loss = details['loss']
+            if loss is None:
+                loss = 'Nothing'
+            reply += f'\n{conflict_id}: {state} in {system}' \
+                     f'\n{FACTION_NAME} {score} {enemy}' \
+                     f'\nOn win we get: {win}' \
+                     f'\nOn defeat we lose: {loss}'
+        print(reply)
+        await ctx.send(reply)
 
 
 @bot.event
@@ -48,7 +67,7 @@ async def on_command_error(ctx, error):
 
 
 @bot.event
-# Logs command errors into 'err.log' file
+# Logs errors into 'err.log' file
 async def on_command_error(ctx, error):
     if isinstance(error, commands.errors.CheckFailure):
         await ctx.send('You do not have required role for this command.')
