@@ -1,33 +1,23 @@
-import os
-import requests
-import json
-import asyncio
-import time
-import math
 import datetime
+import json
+import os
 
+import requests
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv()       # All environment variables are stored in '.env' file
 FACTION_ID = os.getenv('FACTION_ID')
 FACTION_NAME = os.getenv('FACTION_NAME').lower()
 DEBUG = os.getenv('DEBUG')
 
 req_faction = FACTION_NAME.replace(' ', '%20')
 req_uri = 'https://elitebgs.app/api/ebgs/v4/'
-report = ''
 
 
-def faction_update():
+def faction_update():       # Only triggered by Cache class to update faction info
     faction_json = requests.get(f"{req_uri}factions?name={req_faction}")
-    return faction_json
+    faction_json_data = json.loads(faction_json.text)
 
-
-faction_json_stash = faction_update()
-faction_json_data = json.loads(faction_json_stash.text)
-
-
-def conflicts_active():
     if DEBUG:
         print(f'"Faction" reply: {faction_json_data}')
 
@@ -36,15 +26,17 @@ def conflicts_active():
             print(f'{datetime.datetime.now()}, Bad faction name: {req_faction}')
             err_log.write(f'{datetime.datetime.now()}, Bad faction name: {req_faction}')
 
-    conflicts_active_report = {}
-    n = 1
-    for system in faction_json_data['docs'][0]['faction_presence']:
+    return faction_json_data
+
+
+def get_conflicts_active(faction_data):     # Only triggered by Cache class to update systems in conflict states
+    report = {}
+    conflict_id = 1
+    for sys_id, system in enumerate(faction_data['docs'][0]['faction_presence']):
         if DEBUG:
-            print(f'System {n}: {system["system_name"]}')
-            n += 1
+            print(f'System {sys_id+1}: {system["system_name"]}')
 
         for active_state in system['active_states']:
-
             if (
                     active_state['state'] == 'war' or
                     active_state['state'] == 'civil war' or
@@ -65,19 +57,25 @@ def conflicts_active():
                                     conflict['faction2']['name_lower'] == FACTION_NAME
                             )
                     ):
-                        conflicts_active_report.update(
-                            {
-                                system['system_name_lower']: {
+                        if conflict['faction1']['name_lower'] == FACTION_NAME:
+                            us = 'faction1'
+                            them = 'faction2'
+                        else:
+                            us = 'faction2'
+                            them = 'faction1'
+                        report[conflict_id] = {
+                                    'system': system['system_name'],
                                     'state': active_state['state'],
-                                    conflict['faction1']['name_lower']: conflict['faction1']['days_won'],
-                                    conflict['faction2']['name_lower']: conflict['faction2']['days_won']
-                                }
-                            }
-                        )
-    return conflicts_active_report
+                                    'enemy': conflict[them]['name'],
+                                    'score': f'{conflict[us]["days_won"]}-{conflict[them]["days_won"]}',
+                                    'win': conflict[them]['stake'],
+                                    'loss': conflict[us]['stake']
+                        }
+                        conflict_id += 1
+    return report
 
 
-
-
-
-    # return report
+class Cache:
+    def __init__(self):
+        self.faction_data = faction_update()                                # First gets faction data
+        self.conflicts_active = get_conflicts_active(self.faction_data)     # Second gets active conflicts
