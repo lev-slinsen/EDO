@@ -1,11 +1,11 @@
-import os
-import requests
-import json
 import datetime
+import json
+import os
 
+import requests
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv()       # All environment variables are stored in '.env' file
 FACTION_ID = os.getenv('FACTION_ID')
 FACTION_NAME = os.getenv('FACTION_NAME').lower()
 DEBUG = os.getenv('DEBUG')
@@ -14,7 +14,7 @@ req_faction = FACTION_NAME.replace(' ', '%20')
 req_uri = 'https://elitebgs.app/api/ebgs/v4/'
 
 
-def faction_update():
+def faction_update():       # Only triggered by Cache class to update faction info
     faction_json = requests.get(f"{req_uri}factions?name={req_faction}")
     faction_json_data = json.loads(faction_json.text)
 
@@ -29,7 +29,7 @@ def faction_update():
     return faction_json_data
 
 
-def get_conflicts_active(faction_data, *args):
+def get_conflicts_active(faction_data):     # Only triggered by Cache class to update systems in conflict states
     report = {}
     conflict_id = 1
     for sys_id, system in enumerate(faction_data['docs'][0]['faction_presence']):
@@ -77,7 +77,5 @@ def get_conflicts_active(faction_data, *args):
 
 class Cache:
     def __init__(self):
-        """This method runs once per instantiated object, when the object is initialized."""
-        # These attributes are being initialized:
-        self.faction_data = faction_update()  # attribute of objects created from this class
-        self.conflicts_active = get_conflicts_active(self.faction_data)
+        self.faction_data = faction_update()                                # First gets faction data
+        self.conflicts_active = get_conflicts_active(self.faction_data)     # Second gets active conflicts

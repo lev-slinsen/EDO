@@ -1,6 +1,6 @@
-import os
-import datetime
 import asyncio
+import datetime
+import os
 
 from discord.ext import commands
 from discord.ext.commands import CommandNotFound
@@ -8,8 +8,7 @@ from dotenv import load_dotenv
 
 from eddb_api import Cache
 
-load_dotenv()
-# All environment variables are stored in '.env' file
+load_dotenv()       # All environment variables are stored in '.env' file
 TOKEN = os.getenv('DISCORD_TOKEN')
 DEBUG = os.getenv('DEBUG')
 FACTION_NAME = os.getenv('FACTION_NAME')
@@ -17,21 +16,25 @@ FACTION_NAME = os.getenv('FACTION_NAME')
 bot = commands.Bot(command_prefix='!')
 
 
+'''What I do on startup'''
+
+
 @bot.event
-# What I do on startup
 async def on_ready():
     print(f'{bot.user.name} is connected to the following guilds:')
     for guild in bot.guilds:
         print(f'"{guild.name}" with id: {guild.id}\n')
-    while True:
+    while True:     # Updates cache on startup and then every hour
         global cache
         cache = Cache()
         await asyncio.sleep(3600)
 
 
-@bot.command(name='active', help='Shows active conflicts')
+'''Commands I understand'''
+
+
+@bot.command(name='active', help='I will show active conflicts')
 async def conflicts_active_cmd(ctx):
-    # reply = ''
     if len(cache.conflicts_active) == 0:
         await ctx.send(f'Our kingdom is at peace!')
         return
@@ -58,17 +61,18 @@ async def conflicts_active_cmd(ctx):
         await ctx.send(reply)
 
 
+'''How I handle errors'''
+
+
 @bot.event
-# Hides 'command not found' errors in console
-async def on_command_error(ctx, error):
+async def on_command_error(ctx, error):         # Hides 'command not found' errors in console
     if isinstance(error, CommandNotFound):
         return
     raise error
 
 
 @bot.event
-# Logs errors into 'err.log' file
-async def on_command_error(ctx, error):
+async def on_command_error(ctx, error):         # Logs errors into 'err.log' file
     if isinstance(error, commands.errors.CheckFailure):
         await ctx.send('You do not have required role for this command.')
         with open('EDO/err.log', 'a+') as err_log:
