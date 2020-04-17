@@ -32,7 +32,7 @@ async def on_ready():
         global cache
         cache = Cache()
         if cache != cache_old:
-            await send_report()
+            await send_report(CHANNEL_ADMIN)
         await asyncio.sleep(3600)
         cache_old = copy.deepcopy(cache)
 
@@ -40,14 +40,13 @@ async def on_ready():
 '''What I do on my own'''
 
 
-async def send_report():
+async def send_report(channel_to):
     if len(cache.conflicts_active) == 0:
         await bot.get_channel(CHANNEL_ADMIN).send(f'Our kingdom is at peace!')
         return
-    report = f"""
-Conflicts status for EIC:
-
-Active conflicts: {len(cache.conflicts_active)}"""
+    report = f'Conflicts status for EIC:\n' \
+             f'\n' \
+             f'Active conflicts: {len(cache.conflicts_active)}\n'
     for conflict in cache.conflicts_active:
         conflict_id = conflict
         details = cache.conflicts_active[conflict]
@@ -58,15 +57,14 @@ Active conflicts: {len(cache.conflicts_active)}"""
         score_them = details['score_them']
         win = details['win']
         loss = details['loss']
-        report += f"""
-
-{conflict_id}: {state} in {system}.
-{FACTION_NAME} dominated the conflict for {score_us} days and {enemy} dominated for {score_them} days."""
+        report += f'\n' \
+                  f'{conflict_id}: {state.capitalize()} in {system}.\n' \
+                  f'{FACTION_NAME} dominated the conflict for {score_us} days and {enemy} dominated for {score_them} days.\n'
         if win != '':
-            report += f'On win we get: {win}'
+            report += f'On win we get: {win}\n'
         if loss != '':
-            report += f'On defeat we lose: {loss}'
-    await bot.get_channel(CHANNEL_ADMIN).send(report)
+            report += f'On defeat we lose: {loss}\n'
+    await bot.get_channel(channel_to).send(report)
 
 
 '''Commands I understand'''
@@ -74,34 +72,12 @@ Active conflicts: {len(cache.conflicts_active)}"""
 
 @bot.command(name='active', help='I will show active conflicts')
 async def conflicts_active_cmd(ctx):
+    print(ctx.channel.id)
     if len(cache.conflicts_active) == 0:
         await ctx.send(f'Our kingdom is at peace!')
         return
     else:
-        reply = f'Active conflicts: {len(cache.conflicts_active)}'
-        f"""
-Conflicts status for EIC:
-
-Active conflicts: {len(cache.conflicts_active)}"""
-        for conflict in cache.conflicts_active:
-            conflict_id = conflict
-            details = cache.conflicts_active[conflict]
-            system = details['system']
-            state = details['state']
-            enemy = details['enemy']
-            score_us = details['score_us']
-            score_them = details['score_them']
-            win = details['win']
-            loss = details['loss']
-            reply += f"""
-
-{conflict_id}: {state} in {system}.
-{FACTION_NAME} dominated the conflict for {score_us} days and {enemy} dominated for {score_them} days."""
-            if win != '':
-                reply += f'On win we get: {win}'
-            if loss != '':
-                reply += f'On defeat we lose: {loss}'
-        await ctx.send(reply)
+        await send_report(ctx.channel.id)
 
 
 '''How I handle errors'''
