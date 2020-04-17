@@ -67,15 +67,18 @@ def get_conflicts_active(faction_data):     # Only triggered by Cache class to u
                                     'system': system['system_name'],
                                     'state': active_state['state'],
                                     'enemy': conflict[them]['name'],
-                                    'score': f'{conflict[us]["days_won"]}-{conflict[them]["days_won"]}',
+                                    'score_us': conflict[us]["days_won"],
+                                    'score_them': conflict[them]["days_won"],
                                     'win': conflict[them]['stake'],
                                     'loss': conflict[us]['stake']
                         }
                         conflict_id += 1
+    if DEBUG:
+        print(f"Active conflicts report: {report}")
     return report
 
 
 class Cache:
     def __init__(self):
-        self.faction_data = faction_update()                                # First gets faction data
-        self.conflicts_active = get_conflicts_active(self.faction_data)     # Second gets active conflicts
+        self.faction_data = faction_update()                                # Firstly gets faction data
+        self.conflicts_active = get_conflicts_active(self.faction_data)     # Secondly gets active conflicts
