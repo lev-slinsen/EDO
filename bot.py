@@ -1,8 +1,6 @@
 import asyncio
 import datetime
-import json
 import os
-import copy
 
 from discord.ext import commands
 from discord.ext.commands import CommandNotFound
@@ -20,8 +18,8 @@ CHANNEL_USER = int(os.getenv('CHANNEL_USER'))
 bot = commands.Bot(command_prefix='!')
 
 global cache
-global conflicts_active
 conflicts_active = {}
+conflicts_active_order = list()
 
 
 '''What I do on startup'''
@@ -32,46 +30,34 @@ async def on_ready():
     print(f'{bot.user.name} is connected to the following guilds:')
     for guild in bot.guilds:
         print(f'"{guild.name}" with id: {guild.id}\n')
-    cache_old = ''
     while True:     # Updates cache on startup and then every hour
         cache = Cache()
         if DEBUG:
             print('"Cached active conflicts":', cache.conflicts_active)
-        if cache != cache_old:
-            await purge(CHANNEL_ADMIN)
-            for system in cache.conflicts_active:
-                details = cache.conflicts_active[system]
-                if system not in conflicts_active:
-                    conflicts_active[system] = ConflictActive(
-                        details['state'],
-                        details['updated_at'],
-                        details['enemy'],
-                        details['score_us'],
-                        details['score_them'],
-                        details['win'],
-                        details['loss']
-                    )
-                if system in conflicts_active:
-                    if (conflicts_active[system].updated_at != details['updated_at']
-                            and 'updated_at' not in conflicts_active[system].unseen):
-                        conflicts_active[system].unseen.append('updated_at')
-                    if (conflicts_active[system].score_us != details['score_us']
-                            and 'score_us' not in conflicts_active[system].unseen):
-                        conflicts_active[system].unseen.append('score_us')
-                    if (conflicts_active[system].score_them != details['score_them']
-                            and 'score_them' not in conflicts_active[system].unseen):
-                        conflicts_active[system].unseen.append('score_them')
-                print("TEST", conflicts_active[system])
-        await asyncio.sleep(10)
-        cache_old = copy.deepcopy(cache)
-
-
-'''What I can do on my own'''
-
-
-async def purge(channel_to):
-    channel = bot.get_channel(channel_to)
-    await channel.purge()
+        await purge(CHANNEL_ADMIN)
+        for system in cache.conflicts_active:
+            details = cache.conflicts_active[system]
+            if system not in conflicts_active:
+                conflicts_active[system] = ConflictActive(
+                    details['state'],
+                    details['updated_at'],
+                    details['enemy'],
+                    details['score_us'],
+                    details['score_them'],
+                    details['win'],
+                    details['loss']
+                )
+                conflicts_active_order.append(system)
+            if (conflicts_active[system].updated_at != details['updated_at']
+                    and 'updated_at' not in conflicts_active[system].unseen):
+                conflicts_active[system].unseen.append('updated_at')
+            if (conflicts_active[system].score_us != details['score_us']
+                    and 'score_us' not in conflicts_active[system].unseen):
+                conflicts_active[system].unseen.append('score_us')
+            if (conflicts_active[system].score_them != details['score_them']
+                    and 'score_them' not in conflicts_active[system].unseen):
+                conflicts_active[system].unseen.append('score_them')
+        await asyncio.sleep(3600)
 
 
 '''What I remember'''
@@ -95,37 +81,37 @@ class ConflictActive:
         pass
 
 
-class ConflictOrder:
-    def __init__(self, order):
-        self.order = order
+# async def send_report(channel_to):
+#     if len(cache.conflicts_active) == 0:
+#         await bot.get_channel(channel_to).send(f'Our kingdom is at peace!')
+#         return
+#     report = f'Conflicts status for {FACTION_NAME}:\n\n' \
+#              f'Active conflicts: {len(cache.conflicts_active)}\n'
+#     for conflict in cache.conflicts_active:
+#         details = cache.conflicts_active[conflict]
+#         system = conflict
+#         state = details['state']
+#         enemy = details['enemy']
+#         score_us = details['score_us']
+#         score_them = details['score_them']
+#         win = details['win']
+#         loss = details['loss']
+#         report += f'\n{conflict}: {state.capitalize()} in {system}.\n' \
+#                   f'{FACTION_NAME} dominated the conflict for {score_us} days ' \
+#                   f'and {enemy} dominated for {score_them} days.\n'
+#         if win != '':
+#             report += f'On win we get: {win}\n'
+#         if loss != '':
+#             report += f'On defeat we lose: {loss}\n'
+#     await bot.get_channel(channel_to).send(report)
 
-    def __call__(self):
-        return self.order
+
+'''What I can do on my own'''
 
 
-async def send_report(channel_to):
-    if len(cache.conflicts_active) == 0:
-        await bot.get_channel(channel_to).send(f'Our kingdom is at peace!')
-        return
-    report = f'Conflicts status for {FACTION_NAME}:\n\n' \
-             f'Active conflicts: {len(cache.conflicts_active)}\n'
-    for conflict in cache.conflicts_active:
-        details = cache.conflicts_active[conflict]
-        system = conflict
-        state = details['state']
-        enemy = details['enemy']
-        score_us = details['score_us']
-        score_them = details['score_them']
-        win = details['win']
-        loss = details['loss']
-        report += f'\n{conflict}: {state.capitalize()} in {system}.\n' \
-                  f'{FACTION_NAME} dominated the conflict for {score_us} days ' \
-                  f'and {enemy} dominated for {score_them} days.\n'
-        if win != '':
-            report += f'On win we get: {win}\n'
-        if loss != '':
-            report += f'On defeat we lose: {loss}\n'
-    await bot.get_channel(channel_to).send(report)
+async def purge(channel_to):
+    channel = bot.get_channel(channel_to)
+    await channel.purge()
 
 
 '''Commands I understand'''
