@@ -3,6 +3,7 @@ import datetime
 import os
 
 from discord.ext import commands
+from discord.ext import tasks
 from discord.ext.commands import CommandNotFound
 from dotenv import load_dotenv
 
@@ -17,10 +18,6 @@ CHANNEL_USER = int(os.getenv('CHANNEL_USER'))
 
 bot = commands.Bot(command_prefix='!')
 
-global cache
-conflicts_active = {}
-conflicts_active_order = list()
-
 
 '''What I do on startup'''
 
@@ -30,34 +27,8 @@ async def on_ready():
     print(f'{bot.user.name} is connected to the following guilds:')
     for guild in bot.guilds:
         print(f'"{guild.name}" with id: {guild.id}\n')
-    while True:     # Updates cache on startup and then every hour
-        cache = Cache()
-        if DEBUG:
-            print('"Cached active conflicts":', cache.conflicts_active)
-        await purge(CHANNEL_ADMIN)
-        for system in cache.conflicts_active:
-            details = cache.conflicts_active[system]
-            if system not in conflicts_active:
-                conflicts_active[system] = ConflictActive(
-                    details['state'],
-                    details['updated_at'],
-                    details['enemy'],
-                    details['score_us'],
-                    details['score_them'],
-                    details['win'],
-                    details['loss']
-                )
-                conflicts_active_order.append(system)
-            if (conflicts_active[system].updated_at != details['updated_at']
-                    and 'updated_at' not in conflicts_active[system].unseen):
-                conflicts_active[system].unseen.append('updated_at')
-            if (conflicts_active[system].score_us != details['score_us']
-                    and 'score_us' not in conflicts_active[system].unseen):
-                conflicts_active[system].unseen.append('score_us')
-            if (conflicts_active[system].score_them != details['score_them']
-                    and 'score_them' not in conflicts_active[system].unseen):
-                conflicts_active[system].unseen.append('score_them')
-        await asyncio.sleep(3600)
+
+    HourlyReport(bot).send_report.start()
 
 
 '''What I remember'''
@@ -107,6 +78,48 @@ class ConflictActive:
 
 
 '''What I can do on my own'''
+
+
+class HourlyReport(commands.Cog):
+    def __init__(self, bot):
+        self.bot = bot
+        self.conflicts_active = {}
+        self.conflicts_active_order = list()
+
+    @tasks.loop(seconds=15)
+    async def send_report(self):
+        self.cache = Cache()
+        cache = self.cache
+        conflicts_active = self.conflicts_active
+        conflicts_active_order = self.conflicts_active_order
+
+        if DEBUG:
+            print('"Cached active conflicts":', cache.conflicts_active)
+
+        await purge(CHANNEL_ADMIN)
+        for system in cache.conflicts_active:
+            details = cache.conflicts_active[system]
+            if system not in conflicts_active:
+                conflicts_active[system] = ConflictActive(
+                    details['state'],
+                    details['updated_at'],
+                    details['enemy'],
+                    details['score_us'],
+                    details['score_them'],
+                    details['win'],
+                    details['loss']
+                )
+                conflicts_active_order.append(system)
+            if (conflicts_active[system].updated_at != details['updated_at']
+                    and 'updated_at' not in conflicts_active[system].unseen):
+                conflicts_active[system].unseen.append('updated_at')
+            if (conflicts_active[system].score_us != details['score_us']
+                    and 'score_us' not in conflicts_active[system].unseen):
+                conflicts_active[system].unseen.append('score_us')
+            if (conflicts_active[system].score_them != details['score_them']
+                    and 'score_them' not in conflicts_active[system].unseen):
+                conflicts_active[system].unseen.append('score_them')
+            print(system)
 
 
 async def purge(channel_to):
