@@ -31,7 +31,6 @@ def faction_update():       # Only triggered by Cache class to update faction in
 
 def get_conflicts_active(faction_data):     # Only triggered by Cache class to update systems in conflict states
     report = {}
-    conflict_id = 1
     for sys_id, system in enumerate(faction_data['docs'][0]['faction_presence']):
         if DEBUG:
             print(f'System {sys_id+1}: {system["system_name"]}')
@@ -63,18 +62,15 @@ def get_conflicts_active(faction_data):     # Only triggered by Cache class to u
                         else:
                             us = 'faction2'
                             them = 'faction1'
-                        report[conflict_id] = {
-                                    'system': system['system_name'],
+                        report[system['system_name']] = {
                                     'state': active_state['state'],
+                                    'updated_at': system['updated_at'],
                                     'enemy': conflict[them]['name'],
                                     'score_us': conflict[us]["days_won"],
                                     'score_them': conflict[them]["days_won"],
                                     'win': conflict[them]['stake'],
                                     'loss': conflict[us]['stake']
                         }
-                        conflict_id += 1
-    if DEBUG:
-        print(f"Active conflicts report: {report}")
     return report
 
 
