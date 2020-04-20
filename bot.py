@@ -86,15 +86,12 @@ class HourlyReport(commands.Cog):
         self.conflicts_active = {}
         self.conflicts_active_order = list()
 
-    @tasks.loop(seconds=15)
+    @tasks.loop(seconds=60)
     async def send_report(self):
         self.cache = Cache()
         cache = self.cache
         conflicts_active = self.conflicts_active
         conflicts_active_order = self.conflicts_active_order
-
-        if DEBUG:
-            print('"Cached active conflicts":', cache.conflicts_active)
 
         await purge(CHANNEL_ADMIN)
         for system in cache.conflicts_active:

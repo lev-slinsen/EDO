@@ -32,12 +32,8 @@ class Cache:
     def get_conflicts_active(self, faction_data):
         report = {}
         for system in faction_data['docs'][0]['faction_presence']:
-            for state in system['active_states']:
-                if (
-                        state['state'] == 'war' or
-                        state['state'] == 'civil war' or
-                        state['state'] == 'election'
-                ):
+            if system['conflicts']:
+                if system['conflicts'][0]['status'] == 'active':
                     system_name_lower = system['system_name_lower'].replace(' ', '%20')
                     system_json = requests.get(f"{req_uri}systems?name={system_name_lower}")
                     system_json_data = json.loads(system_json.text)
@@ -60,53 +56,75 @@ class Cache:
                                 us = 'faction2'
                                 them = 'faction1'
                             report[system['system_name']] = {
-                                'state': state['state'],
+                                'state': system['conflicts'][0]['type'],
                                 'enemy': conflict[them]['name'],
-                                'score_us': conflict[us]["days_won"],
-                                'score_them': conflict[them]["days_won"],
+                                'score_us': conflict[us]['days_won'],
+                                'score_them': conflict[them]['days_won'],
                                 'win': conflict[them]['stake'],
                                 'loss': conflict[us]['stake'],
                                 'updated_at': system['updated_at']
                             }
+        if DEBUG:
+            print('"Active conflicts report:"', report)
         return report
 
     def get_conflicts_recovering(self, faction_data):
         report = {}
         for system in faction_data['docs'][0]['faction_presence']:
-            for state in system['recovering_states']:
+            if system['conflicts']:
                 if (
-                        state['state'] == 'war' or
-                        state['state'] == 'civil war' or
-                        state['state'] == 'election'
+                        system['conflicts'][0]['status'] == 'recovering' or
+                        system['conflicts'][0]['status'] == ''
                 ):
                     opponent_name = system['conflicts'][0]['opponent_name']
                     opp_faction_json = requests.get(f"{req_uri}factions?name={opponent_name}")
                     opp_faction_json_data = json.loads(opp_faction_json.text)
 
                     for opp_system in opp_faction_json_data['docs'][0]['faction_presence']:
-                        if opp_system['conflicts'][0]['opponent_name_lower'] == FACTION_NAME:
-                            days_won = system['conflicts'][0]['days_won']
-                            opp_days_won = opp_system['conflicts'][0]['days_won']
-                            win, loss = '', ''
-                            if days_won > opp_days_won:
-                                status = 'Victory'
-                                win = system['conflicts'][0]['stake']
-                            else:
-                                status = 'Defeat'
-                                loss = opp_system['conflicts'][0]['stake']
-                            report[system['system_name']] = {
-                                'status': status,
-                                'days_won': days_won,
-                                'days_lost': opp_days_won,
-                                'win': win,
-                                'loss': loss,
-                                'updated_at': system['updated_at']
-                            }
-        print('"Recovering report"', report)
+                        if opp_system['conflicts']:
+                            if opp_system['conflicts'][0]['opponent_name_lower'] == FACTION_NAME:
+                                days_won = system['conflicts'][0]['days_won']
+                                opp_days_won = opp_system['conflicts'][0]['days_won']
+                                if days_won > opp_days_won:
+                                    status = 'Victory'
+                                    stake = system['conflicts'][0]['stake']
+                                else:
+                                    status = 'Defeat'
+                                    stake = opp_system['conflicts'][0]['stake']
+
+                                report[system['system_name']] = {
+                                    'state': system['conflicts'][0]['type'],
+                                    'status': status,
+                                    'days_won': days_won,
+                                    'days_lost': opp_days_won,
+                                    'stake': stake,
+                                    'updated_at': system['updated_at']
+                                }
+        if DEBUG:
+            print('"Recovering conflicts report:"', report)
         return report
 
     def get_conflicts_pending(self, faction_data):
-        pass
+        report = {}
+        for system in faction_data['docs'][0]['faction_presence']:
+            if system['conflicts']:
+                if system['conflicts'][0]['status'] == 'pending':
+                    opponent_name = system['conflicts'][0]['opponent_name']
+                    opp_faction_json = requests.get(f"{req_uri}factions?name={opponent_name}")
+                    opp_faction_json_data = json.loads(opp_faction_json.text)
+
+                    for opp_system in opp_faction_json_data['docs'][0]['faction_presence']:
+                        if opp_system['conflicts']:
+                            if opp_system['conflicts'][0]['opponent_name_lower'] == FACTION_NAME:
+                                report[system['system_name']] = {
+                                    'state': system['conflicts'][0]['type'],
+                                    'win': opp_system['conflicts'][0]['stake'],
+                                    'loss': system['conflicts'][0]['stake'],
+                                    'updated_at': system['updated_at']
+                                }
+        if DEBUG:
+            print('"Pending conflicts report:"', report)
+        return report
 
     def __init__(self):
         self.faction_data = self.faction_update()
