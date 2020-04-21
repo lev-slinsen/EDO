@@ -2,6 +2,7 @@ import asyncio
 import datetime
 import os
 
+from collections import OrderedDict
 from discord.ext import commands
 from discord.ext import tasks
 from discord.ext.commands import CommandNotFound
@@ -9,15 +10,15 @@ from dotenv import load_dotenv
 
 from eddb_api import Cache
 
-load_dotenv()       # All environment variables are stored in '.env' file
+load_dotenv()   # All environment variables are stored in '.env' file
 TOKEN = os.getenv('DISCORD_TOKEN')
 DEBUG = os.getenv('DEBUG')
 FACTION_NAME = os.getenv('FACTION_NAME')
 CHANNEL_ADMIN = int(os.getenv('CHANNEL_ADMIN'))
 CHANNEL_USER = int(os.getenv('CHANNEL_USER'))
+ADMIN_ROLE = os.getenv('ADMIN_ROLE')
 
 bot = commands.Bot(command_prefix='!')
-
 
 '''What I do on startup'''
 
@@ -31,92 +32,7 @@ async def on_ready():
     HourlyReport(bot).send_report.start()
 
 
-'''What I remember'''
-
-
-class ConflictActive:
-    def __init__(self, state, updated_at, enemy, score_us, score_them, win, loss):
-        self.state = state
-        self.updated_at = updated_at
-        self.enemy = enemy
-        self.score_us = score_us
-        self.score_them = score_them
-        self.win = win
-        self.loss = loss
-        self.unseen = ()
-
-    def update(self):
-        pass
-
-    def report(self):
-        pass
-
-
-# async def send_report(channel_to):
-#     if len(cache.conflicts_active) == 0:
-#         await bot.get_channel(channel_to).send(f'Our kingdom is at peace!')
-#         return
-#     report = f'Conflicts status for {FACTION_NAME}:\n\n' \
-#              f'Active conflicts: {len(cache.conflicts_active)}\n'
-#     for conflict in cache.conflicts_active:
-#         details = cache.conflicts_active[conflict]
-#         system = conflict
-#         state = details['state']
-#         enemy = details['enemy']
-#         score_us = details['score_us']
-#         score_them = details['score_them']
-#         win = details['win']
-#         loss = details['loss']
-#         report += f'\n{conflict}: {state.capitalize()} in {system}.\n' \
-#                   f'{FACTION_NAME} dominated the conflict for {score_us} days ' \
-#                   f'and {enemy} dominated for {score_them} days.\n'
-#         if win != '':
-#             report += f'On win we get: {win}\n'
-#         if loss != '':
-#             report += f'On defeat we lose: {loss}\n'
-#     await bot.get_channel(channel_to).send(report)
-
-
 '''What I can do on my own'''
-
-
-class HourlyReport(commands.Cog):
-    def __init__(self, bot):
-        self.bot = bot
-        self.conflicts_active = {}
-        self.conflicts_active_order = list()
-
-    @tasks.loop(seconds=60)
-    async def send_report(self):
-        self.cache = Cache()
-        cache = self.cache
-        conflicts_active = self.conflicts_active
-        conflicts_active_order = self.conflicts_active_order
-
-        await purge(CHANNEL_ADMIN)
-        for system in cache.conflicts_active:
-            details = cache.conflicts_active[system]
-            if system not in conflicts_active:
-                conflicts_active[system] = ConflictActive(
-                    details['state'],
-                    details['updated_at'],
-                    details['enemy'],
-                    details['score_us'],
-                    details['score_them'],
-                    details['win'],
-                    details['loss']
-                )
-                conflicts_active_order.append(system)
-            if (conflicts_active[system].updated_at != details['updated_at']
-                    and 'updated_at' not in conflicts_active[system].unseen):
-                conflicts_active[system].unseen.append('updated_at')
-            if (conflicts_active[system].score_us != details['score_us']
-                    and 'score_us' not in conflicts_active[system].unseen):
-                conflicts_active[system].unseen.append('score_us')
-            if (conflicts_active[system].score_them != details['score_them']
-                    and 'score_them' not in conflicts_active[system].unseen):
-                conflicts_active[system].unseen.append('score_them')
-            print(system)
 
 
 async def purge(channel_to):
@@ -124,26 +40,75 @@ async def purge(channel_to):
     await channel.purge()
 
 
-'''Commands I understand'''
+class HourlyReport(commands.Cog):
+    def __init__(self, bot):
+        self.bot = bot
+        self.conflicts_active_order = OrderedDict()
+        self.cache_old = None
 
+    @tasks.loop(minutes=60)
+    async def send_report(self):
+        self.cache = Cache()
+        cache = self.cache
 
-# @bot.command(name='active', help='I will show active conflicts')
-# async def conflicts_active_cmd(ctx):
-#     await send_report(ctx.channel.id)
+        if self.cache_old is None:
+            pass
+        else:
+            if cache() == self.cache_old():
+                await bot.get_channel(CHANNEL_ADMIN).send(f"Ok, people, move along! There's nothing to see here.")
+                return
+
+        if cache == self.cache_old:
+            print('old')
+
+        report = f"@{ADMIN_ROLE} Today's special menu:\n"
+
+        for conflict in cache.conflicts_active:
+            if conflict not in self.conflicts_active_order:
+                self.conflicts_active_order[conflict] = {
+                    'score_us': cache.conflicts_active[conflict]['score_us'],
+                    'score_them': cache.conflicts_active[conflict]['score_them'],
+                    'updated_at': cache.conflicts_active[conflict]['updated_at']
+                }
+
+        await purge(CHANNEL_ADMIN)
+
+        if len(cache.conflicts_active) == 0:
+            report += f'Our kingdom is at peace! (for now)\n\n'
+        else:
+            report += f'Active conflicts:\n\n'
+            for idx, conflict in enumerate(self.conflicts_active_order):
+                if conflict not in cache.conflicts_active:
+                    self.conflicts_active_order.pop(conflict)
+                else:
+                    report += '{0}: {1} in {2}\n' \
+                              'Score: {3} [ {4} - {5} ] {6}\n' \
+                              'Last updated: {7}\n\n'.format(
+                                idx,
+                                cache.conflicts_active[conflict]["state"].capitalize(),
+                                conflict,
+                                FACTION_NAME,
+                                self.conflicts_active_order[conflict]["score_us"],
+                                self.conflicts_active_order[conflict]["score_them"],
+                                cache.conflicts_active[conflict]["opponent"],
+                                self.conflicts_active_order[conflict]["updated_at"]
+                              )
+        await bot.get_channel(CHANNEL_ADMIN).send(report)
+        self.cache_old = cache
 
 
 '''How I handle errors'''
 
 
 @bot.event
-async def on_command_error(ctx, error):         # Hides 'command not found' errors in console
+async def on_command_error(ctx, error):     # Hides 'command not found' errors in console
     if isinstance(error, CommandNotFound):
         return
     raise error
 
 
 @bot.event
-async def on_command_error(ctx, error):         # Logs errors into 'err.log' file
+async def on_command_error(ctx, error):     # Logs errors into 'err.log' file
     if isinstance(error, commands.errors.CheckFailure):
         await ctx.send('You do not have required role for this command.')
         with open('EDO/err.log', 'a+') as err_log:

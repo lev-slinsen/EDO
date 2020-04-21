@@ -20,7 +20,7 @@ class Cache:
         faction_json_data = json.loads(faction_json.text)
 
         if DEBUG:
-            print(f'"Faction" reply: {faction_json_data}')
+            print(f'Cached faction: {faction_json_data}')
 
         if not faction_json_data['docs']:
             with open('err.log', 'a+') as err_log:
@@ -38,8 +38,8 @@ class Cache:
                     system_json = requests.get(f"{req_uri}systems?name={system_name_lower}")
                     system_json_data = json.loads(system_json.text)
 
-                    if DEBUG:
-                        print(f'"Active conflict system" reply: {system_json_data}')
+                    # if DEBUG:
+                    #     print(f'-Active conflict system: {system_json_data}')
 
                     for conflict in system_json_data['docs'][0]['conflicts']:
                         if (
@@ -57,7 +57,7 @@ class Cache:
                                 them = 'faction1'
                             report[system['system_name']] = {
                                 'state': system['conflicts'][0]['type'],
-                                'enemy': conflict[them]['name'],
+                                'opponent': conflict[them]['name'],
                                 'score_us': conflict[us]['days_won'],
                                 'score_them': conflict[them]['days_won'],
                                 'win': conflict[them]['stake'],
@@ -65,7 +65,7 @@ class Cache:
                                 'updated_at': system['updated_at']
                             }
         if DEBUG:
-            print('"Active conflicts report:"', report)
+            print('Cached conflicts_active:', report)
         return report
 
     def get_conflicts_recovering(self, faction_data):
@@ -101,7 +101,7 @@ class Cache:
                                     'updated_at': system['updated_at']
                                 }
         if DEBUG:
-            print('"Recovering conflicts report:"', report)
+            print('Cached conflicts_recovering:', report)
         return report
 
     def get_conflicts_pending(self, faction_data):
@@ -123,7 +123,7 @@ class Cache:
                                     'updated_at': system['updated_at']
                                 }
         if DEBUG:
-            print('"Pending conflicts report:"', report)
+            print('Cached conflicts_pending:', report, '\n')
         return report
 
     def __init__(self):
@@ -131,3 +131,8 @@ class Cache:
         self.conflicts_active = self.get_conflicts_active(self.faction_data)
         self.conflicts_recovering = self.get_conflicts_recovering(self.faction_data)
         self.conflicts_pending = self.get_conflicts_pending(self.faction_data)
+
+    def __call__(self):
+        return (self.conflicts_active,
+                self.conflicts_recovering,
+                self.conflicts_pending)
