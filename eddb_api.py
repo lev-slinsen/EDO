@@ -31,11 +31,11 @@ class Cache:
 
         return faction_json_data
 
-    def updated_ago(self, updated_at):
+    def updated_ago(self, api_updated_at):
         frontier_tz = pytz.timezone('Europe/Berlin')
         frontier_time = datetime.now(frontier_tz)
-        updated_at = frontier_tz.localize(datetime.strptime(updated_at[0:16], '%Y-%m-%dT%H:%M'))
-        updated_ago = str(frontier_time - updated_at)[:-10]
+        updated_at = frontier_tz.localize(datetime.strptime(api_updated_at[0:16], '%Y-%m-%dT%H:%M'))
+        updated_ago = str(frontier_time - updated_at)[:-13]
         return updated_ago
 
     def get_conflicts_active(self, faction_data):
