@@ -101,13 +101,15 @@ class HourlyReport(commands.Cog):
                             cache.conflicts_active[conflict]["updated_ago"][-2:] == '1' or
                             cache.conflicts_active[conflict]["updated_ago"][-2:] == '21'
                     ):
-                        h = 'hour'
+                        h_text = f'{cache.conflicts_active[conflict]["updated_ago"]} hour ago.'
+                    elif cache.conflicts_active[conflict]["updated_ago"][-2:] == '0':
+                        h_text = 'less than an hour ago.'
                     else:
-                        h = 'hours'
+                        h_text = f'{cache.conflicts_active[conflict]["updated_ago"]} hours ago.'
 
                     report += '{0}: {1} in {2}\n' \
                               '{3} [ {4} - {5} ] {6}\n' \
-                              'Last updated: {7} {8} ago.\n\n'.format(
+                              'Last updated: {7}\n\n'.format(
                                 idx,
                                 cache.conflicts_active[conflict]["state"].capitalize(),
                                 system,
@@ -115,8 +117,7 @@ class HourlyReport(commands.Cog):
                                 score_us,
                                 score_them,
                                 cache.conflicts_active[conflict]["opponent"],
-                                cache.conflicts_active[conflict]["updated_ago"],
-                                h
+                                h_text
                               )
         await bot.get_channel(CHANNEL_ADMIN).send(report)
         self.cache_old = cache
