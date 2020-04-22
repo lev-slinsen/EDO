@@ -1,8 +1,10 @@
 import datetime
 import json
 import os
+import pytz
 
 import requests
+from datetime import datetime
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -29,6 +31,13 @@ class Cache:
 
         return faction_json_data
 
+    def updated_ago(self, updated_at):
+        frontier_tz = pytz.timezone('Europe/Berlin')
+        frontier_time = datetime.now(frontier_tz)
+        updated_at = frontier_tz.localize(datetime.strptime(updated_at[0:16], '%Y-%m-%dT%H:%M'))
+        updated_ago = str(frontier_time - updated_at)[:-10]
+        return updated_ago
+
     def get_conflicts_active(self, faction_data):
         report = {}
         for system in faction_data['docs'][0]['faction_presence']:
@@ -37,9 +46,6 @@ class Cache:
                     system_name_lower = system['system_name_lower'].replace(' ', '%20')
                     system_json = requests.get(f"{req_uri}systems?name={system_name_lower}")
                     system_json_data = json.loads(system_json.text)
-
-                    # if DEBUG:
-                    #     print(f'-Active conflict system: {system_json_data}')
 
                     for conflict in system_json_data['docs'][0]['conflicts']:
                         if (
@@ -55,6 +61,7 @@ class Cache:
                             else:
                                 us = 'faction2'
                                 them = 'faction1'
+
                             report[system['system_name']] = {
                                 'state': system['conflicts'][0]['type'],
                                 'opponent': conflict[them]['name'],
@@ -62,7 +69,7 @@ class Cache:
                                 'score_them': conflict[them]['days_won'],
                                 'win': conflict[them]['stake'],
                                 'loss': conflict[us]['stake'],
-                                'updated_at': system['updated_at']
+                                'updated_ago': self.updated_ago(system['updated_at'])
                             }
         if DEBUG:
             print('Cached conflicts_active:', report)
@@ -98,7 +105,7 @@ class Cache:
                                     'days_won': days_won,
                                     'days_lost': opp_days_won,
                                     'stake': stake,
-                                    'updated_at': system['updated_at']
+                                    'updated_ago': self.updated_ago(system['updated_at'])
                                 }
         if DEBUG:
             print('Cached conflicts_recovering:', report)
@@ -120,7 +127,7 @@ class Cache:
                                     'state': system['conflicts'][0]['type'],
                                     'win': opp_system['conflicts'][0]['stake'],
                                     'loss': system['conflicts'][0]['stake'],
-                                    'updated_at': system['updated_at']
+                                    'updated_ago': self.updated_ago(system['updated_at'])
                                 }
         if DEBUG:
             print('Cached conflicts_pending:', report, '\n')

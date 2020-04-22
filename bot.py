@@ -58,40 +58,56 @@ class HourlyReport(commands.Cog):
                 await bot.get_channel(CHANNEL_ADMIN).send(f"Ok, people, move along! There's nothing to see here.")
                 return
 
-        if cache == self.cache_old:
-            print('old')
-
         report = f"@{ADMIN_ROLE} Today's special menu:\n"
-
-        for conflict in cache.conflicts_active:
-            if conflict not in self.conflicts_active_order:
-                self.conflicts_active_order[conflict] = {
-                    'score_us': cache.conflicts_active[conflict]['score_us'],
-                    'score_them': cache.conflicts_active[conflict]['score_them'],
-                    'updated_at': cache.conflicts_active[conflict]['updated_at']
-                }
 
         await purge(CHANNEL_ADMIN)
 
         if len(cache.conflicts_active) == 0:
             report += f'Our kingdom is at peace! (for now)\n\n'
         else:
+
+            for conflict in cache.conflicts_active:
+                if conflict not in self.conflicts_active_order:
+                    self.conflicts_active_order[conflict] = {
+                        'score_us': cache.conflicts_active[conflict]['score_us'],
+                        'score_them': cache.conflicts_active[conflict]['score_them'],
+                        'updated_ago': cache.conflicts_active[conflict]['updated_ago'],
+                        'new': True
+                    }
+
             report += f'Active conflicts:\n\n'
             for idx, conflict in enumerate(self.conflicts_active_order):
                 if conflict not in cache.conflicts_active:
                     self.conflicts_active_order.pop(conflict)
                 else:
+                    if cache.conflicts_active[conflict]['score_us'] != \
+                            self.conflicts_active_order[conflict]['score_us']:
+                        score_us = f'**{cache.conflicts_active[conflict]["score_us"]}**'
+                    else:
+                        score_us = cache.conflicts_active[conflict]["score_us"]
+
+                    if cache.conflicts_active[conflict]['score_them'] != \
+                            self.conflicts_active_order[conflict]['score_them']:
+                        score_them = f'**{cache.conflicts_active[conflict]["score_them"]}**'
+                    else:
+                        score_them = cache.conflicts_active[conflict]["score_them"]
+
+                    if self.conflicts_active_order[conflict]['new']:
+                        system = f'**{conflict}**:exclamation:'
+                    else:
+                        system = conflict
+
                     report += '{0}: {1} in {2}\n' \
-                              'Score: {3} [ {4} - {5} ] {6}\n' \
-                              'Last updated: {7}\n\n'.format(
+                              '{3} [ {4} - {5} ] {6}\n' \
+                              'Last updated: {7} ago\n\n'.format(
                                 idx,
                                 cache.conflicts_active[conflict]["state"].capitalize(),
-                                conflict,
+                                system,
                                 FACTION_NAME,
-                                self.conflicts_active_order[conflict]["score_us"],
-                                self.conflicts_active_order[conflict]["score_them"],
+                                score_us,
+                                score_them,
                                 cache.conflicts_active[conflict]["opponent"],
-                                self.conflicts_active_order[conflict]["updated_at"]
+                                cache.conflicts_active[conflict]["updated_ago"]
                               )
         await bot.get_channel(CHANNEL_ADMIN).send(report)
         self.cache_old = cache
