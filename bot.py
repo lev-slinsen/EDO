@@ -1,6 +1,8 @@
 import asyncio
 import datetime
 import os
+import gc
+import discord
 
 from collections import OrderedDict
 from discord.ext import commands
@@ -15,10 +17,10 @@ TOKEN = os.getenv('DISCORD_TOKEN')
 DEBUG = os.getenv('DEBUG')
 FACTION_NAME = os.getenv('FACTION_NAME')
 CHANNEL_ADMIN = int(os.getenv('CHANNEL_ADMIN'))
-CHANNEL_USER = int(os.getenv('CHANNEL_USER'))
 ADMIN_ROLE = os.getenv('ADMIN_ROLE')
 
 bot = commands.Bot(command_prefix='!')
+client = discord.Client()
 
 '''What I do on startup'''
 
@@ -45,27 +47,33 @@ class HourlyReport(commands.Cog):
         self.bot = bot
         self.conflicts_active_order = OrderedDict()
         self.cache_old = None
+        self.message_start = 'Conflicts report:\n\n'
+        self.comment = ''
+        self.report = ''
+        self.report_message_id = 0
 
-    @tasks.loop(minutes=60)
-    async def send_report(self):
-        self.cache = Cache()
-        cache = self.cache
+    def updated_ago_text(self, updated_ago):
+        if (
+                updated_ago[-2:] == '1' or
+                updated_ago[-2:] == '21'
+        ):
+            text = f'{updated_ago} hour ago.'
+        elif updated_ago[-2:] == '0':
+            text = 'less than an hour ago.'
+        else:
+            text = f'{updated_ago} hours ago.'
+        return text
 
+    def report_active(self, cache):
         if self.cache_old is None:
             pass
         else:
             if cache() == self.cache_old():
-                await bot.get_channel(CHANNEL_ADMIN).send(f"Ok, people, move along! There's nothing to see here.")
                 return
 
-        report = f"@{ADMIN_ROLE} Today's special menu:\n"
-
-        await purge(CHANNEL_ADMIN)
-
         if len(cache.conflicts_active) == 0:
-            report += f'Our kingdom is at peace! (for now)\n\n'
+            self.report += f'Our kingdom is at peace! (for now)\n\n'
         else:
-
             for conflict in cache.conflicts_active:
                 if conflict not in self.conflicts_active_order:
                     self.conflicts_active_order[conflict] = {
@@ -75,7 +83,7 @@ class HourlyReport(commands.Cog):
                         'new': True
                     }
 
-            report += f'Active conflicts:\n\n'
+            self.report += f'Active conflicts:\n\n'
             for idx, conflict in enumerate(self.conflicts_active_order):
                 if conflict not in cache.conflicts_active:
                     self.conflicts_active_order.pop(conflict)
@@ -97,30 +105,115 @@ class HourlyReport(commands.Cog):
                     else:
                         system = conflict
 
-                    if (
-                            cache.conflicts_active[conflict]["updated_ago"][-2:] == '1' or
-                            cache.conflicts_active[conflict]["updated_ago"][-2:] == '21'
-                    ):
-                        h_text = f'{cache.conflicts_active[conflict]["updated_ago"]} hour ago.'
-                    elif cache.conflicts_active[conflict]["updated_ago"][-2:] == '0':
-                        h_text = 'less than an hour ago.'
-                    else:
-                        h_text = f'{cache.conflicts_active[conflict]["updated_ago"]} hours ago.'
+                    self.report += '{0}: {1} in {2}\n' \
+                                   '{3} [ {4} - {5} ] {6}\n'.format(
+                                    idx+1,
+                                    cache.conflicts_active[conflict]["state"].capitalize(),
+                                    system,
+                                    FACTION_NAME,
+                                    score_us,
+                                    score_them,
+                                    cache.conflicts_active[conflict]["opponent"],
+                                    )
 
-                    report += '{0}: {1} in {2}\n' \
-                              '{3} [ {4} - {5} ] {6}\n' \
-                              'Last updated: {7}\n\n'.format(
-                                idx,
-                                cache.conflicts_active[conflict]["state"].capitalize(),
-                                system,
-                                FACTION_NAME,
-                                score_us,
-                                score_them,
-                                cache.conflicts_active[conflict]["opponent"],
-                                h_text
-                              )
-        await bot.get_channel(CHANNEL_ADMIN).send(report)
+                    if cache.conflicts_active[conflict]['win']:
+                        self.report += f'On victory we gain: {cache.conflicts_active[conflict]["win"]}\n'
+
+                    if cache.conflicts_active[conflict]['loss']:
+                        self.report += f'On defeat we lose: {cache.conflicts_active[conflict]["loss"]}\n'
+
+                    self.report += f'Last updated: ' \
+                                   f'{self.updated_ago_text(cache.conflicts_active[conflict]["updated_ago"])}\n\n'
+
+    def report_recovering(self, cache):
+        if len(cache.conflicts_recovering) == 0:
+            pass
+        else:
+            self.report += 'Recovering from conflicts:\n\n'
+            for idx, conflict in enumerate(cache.conflicts_recovering):
+                state = cache.conflicts_recovering[conflict]["state"]
+                status = cache.conflicts_recovering[conflict]["status"]
+                stake = cache.conflicts_recovering[conflict]["stake"]
+                self.report += '{0}: {1} in {2} - {3}. '.format(
+                                idx+1,
+                                state.capitalize(),
+                                conflict,
+                                status.capitalize(),
+                                )
+                if stake:
+                    if status == 'victory':
+                        self.report += f'We won {stake}\n'
+                    if status == 'defeat':
+                        self.report += f'We lost {stake}\n'
+                else:
+                    self.report += '\n'
+                self.report += f'Last updated: ' \
+                               f'{self.updated_ago_text(cache.conflicts_recovering[conflict]["updated_ago"])}\n\n'
+
+    def report_pending(self, cache):
+        if len(cache.conflicts_pending) == 0:
+            pass
+        else:
+            self.report += 'Pending conflicts:\n\n'
+            for idx, conflict in enumerate(cache.conflicts_pending):
+                state = cache.conflicts_pending[conflict]["state"]
+                self.report += '{0}: {1} in {2}.\n'.format(
+                                idx+1,
+                                state.capitalize(),
+                                conflict,
+                                )
+                if cache.conflicts_pending[conflict]['win']:
+                    self.report += f'On victory we gain: {cache.conflicts_pending[conflict]["win"]}\n'
+
+                if cache.conflicts_pending[conflict]['loss']:
+                    self.report += f'On defeat we lose: {cache.conflicts_pending[conflict]["loss"]}\n'
+
+                self.report += f'Last updated: ' \
+                               f'{self.updated_ago_text(cache.conflicts_pending[conflict]["updated_ago"])}\n\n'
+
+    @tasks.loop(minutes=60)
+    async def send_report(self):
+        self.cache = Cache()
+        cache = self.cache
+
+        self.report_active(cache)
+        self.report_recovering(cache)
+        self.report_pending(cache)
+
+        if DEBUG:
+            await purge(CHANNEL_ADMIN)
+
+        if self.comment == '':
+            await bot.get_channel(CHANNEL_ADMIN).send(f'{self.message_start}{self.report}')
+        else:
+            await bot.get_channel(CHANNEL_ADMIN).send(f'{self.message_start}{self.comment}\n\n{self.report}')
+
         self.cache_old = cache
+
+    @bot.event
+    async def on_message(message):
+        if message.author == bot.user:
+            global report_message_id
+            report_message_id = message.id
+        await bot.process_commands(message)
+
+
+@bot.command(name='comment')
+@commands.has_role(ADMIN_ROLE)
+async def comment(ctx, arg):
+    for obj in gc.get_objects():
+        if isinstance(obj, HourlyReport):
+
+            msg = await ctx.channel.fetch_message(report_message_id)
+            await msg.delete()
+
+            obj.comment = arg
+            if obj.comment == '':
+                await bot.get_channel(CHANNEL_ADMIN).send(f'{obj.message_start}{obj.report}')
+            else:
+                await bot.get_channel(CHANNEL_ADMIN).send(f'{obj.message_start}{obj.comment}\n\n{obj.report}')
+
+    await ctx.message.delete()
 
 
 '''How I handle errors'''

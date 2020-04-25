@@ -8,7 +8,6 @@ from datetime import datetime
 from dotenv import load_dotenv
 
 load_dotenv()
-FACTION_ID = os.getenv('FACTION_ID')
 FACTION_NAME = os.getenv('FACTION_NAME').lower()
 DEBUG = os.getenv('DEBUG')
 
@@ -46,6 +45,8 @@ class Cache:
                     system_name_lower = system['system_name_lower'].replace(' ', '%20')
                     system_json = requests.get(f"{req_uri}systems?name={system_name_lower}")
                     system_json_data = json.loads(system_json.text)
+                    if DEBUG:
+                        print(f' > Conflict system data: {system_json_data}')
 
                     for conflict in system_json_data['docs'][0]['conflicts']:
                         if (
@@ -93,10 +94,10 @@ class Cache:
                                 days_won = system['conflicts'][0]['days_won']
                                 opp_days_won = opp_system['conflicts'][0]['days_won']
                                 if days_won > opp_days_won:
-                                    status = 'Victory'
+                                    status = 'victory'
                                     stake = system['conflicts'][0]['stake']
                                 else:
-                                    status = 'Defeat'
+                                    status = 'defeat'
                                     stake = opp_system['conflicts'][0]['stake']
 
                                 report[system['system_name']] = {
