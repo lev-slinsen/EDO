@@ -20,7 +20,7 @@ ADMIN_ROLE = os.getenv('ADMIN_ROLE')
 bot = commands.Bot(command_prefix='!')
 client = discord.Client()
 
-number_emoji = (':one:', ':two:', ':three:', ':four:', ':five:', ':six:', ':seven:', ':eight:', ':nine:', ':ten:')
+number_emoji = (':zero:', ':one:', ':two:', ':three:', ':four:', ':five:', ':six:', ':seven:', ':eight:', ':nine:', ':ten:')
 
 
 '''What I do on startup'''
@@ -39,13 +39,13 @@ async def on_ready():
 
 
 async def purge_own_messages(channel_to):
-    for message in await bot.get_channel(CHANNEL_ADMIN).history(limit=200).flatten():
+    for message in await bot.get_channel(channel_to).history(limit=200).flatten():
         if message.author == bot.user:
             await message.delete()
 
 
 async def purge_commands(channel_to):
-    for message in await bot.get_channel(CHANNEL_ADMIN).history(limit=200).flatten():
+    for message in await bot.get_channel(channel_to).history(limit=200).flatten():
         if message.content.startswith('!'):
             await message.delete()
 
@@ -142,9 +142,6 @@ class HourlyReport(commands.Cog):
 
                     self.report += f'Last updated: ' \
                                    f'{self.updated_ago_text(cache.conflicts_active[conflict]["updated_ago"])}\n\n'
-
-                    if DEBUG:
-                        print('Conflicts order:', self.conflicts_active_order)
 
     def report_recovering(self, cache):
         if len(cache.conflicts_recovering) == 0:
