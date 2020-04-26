@@ -1,10 +1,10 @@
 import datetime
 import json
 import os
-import pytz
-
-import requests
 from datetime import datetime
+
+import pytz
+import requests
 from dotenv import load_dotenv
 
 load_dotenv()

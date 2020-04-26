@@ -1,10 +1,9 @@
-import asyncio
 import datetime
-import os
 import gc
-import discord
-
+import os
 from collections import OrderedDict
+
+import discord
 from discord.ext import commands
 from discord.ext import tasks
 from discord.ext.commands import CommandNotFound
@@ -21,6 +20,7 @@ ADMIN_ROLE = os.getenv('ADMIN_ROLE')
 
 bot = commands.Bot(command_prefix='!')
 client = discord.Client()
+
 
 '''What I do on startup'''
 
@@ -42,11 +42,23 @@ async def purge(channel_to):
     await channel.purge()
 
 
+@bot.event
+async def on_message(message):
+    for obj in gc.get_objects():
+        if isinstance(obj, HourlyReport):
+            if (
+                    message.author == bot.user and
+                    obj.message_start in message.content
+            ):
+                global report_message_id
+                report_message_id = message.id
+    await bot.process_commands(message)
+
+
 class HourlyReport(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.conflicts_active_order = OrderedDict()
-        self.cache_old = None
         self.message_start = 'Conflicts report:\n\n'
         self.comment = ''
         self.report = ''
@@ -65,11 +77,7 @@ class HourlyReport(commands.Cog):
         return text
 
     def report_active(self, cache):
-        if self.cache_old is None:
-            pass
-        else:
-            if cache() == self.cache_old():
-                return
+        self.report = ''
 
         if len(cache.conflicts_active) == 0:
             self.report += f'Our kingdom is at peace! (for now)\n\n'
@@ -171,31 +179,26 @@ class HourlyReport(commands.Cog):
                 self.report += f'Last updated: ' \
                                f'{self.updated_ago_text(cache.conflicts_pending[conflict]["updated_ago"])}\n\n'
 
-    @tasks.loop(minutes=60)
+    @tasks.loop(minutes=30)
     async def send_report(self):
         self.cache = Cache()
         cache = self.cache
 
-        self.report_active(cache)
+        self.report_active(cache)   # TODO: Refactor, it appears in commands
         self.report_recovering(cache)
         self.report_pending(cache)
 
         if DEBUG:
+            print('Conflicts order:', self.conflicts_active_order)
             await purge(CHANNEL_ADMIN)
 
-        if self.comment == '':
+        if self.comment == '':  # TODO: Refactor, it appears in commands
             await bot.get_channel(CHANNEL_ADMIN).send(f'{self.message_start}{self.report}')
         else:
             await bot.get_channel(CHANNEL_ADMIN).send(f'{self.message_start}{self.comment}\n\n{self.report}')
 
-        self.cache_old = cache
 
-    @bot.event
-    async def on_message(message):
-        if message.author == bot.user:
-            global report_message_id
-            report_message_id = message.id
-        await bot.process_commands(message)
+'''Commands I understand'''
 
 
 @bot.command(name='comment')
@@ -203,16 +206,71 @@ class HourlyReport(commands.Cog):
 async def comment(ctx, arg):
     for obj in gc.get_objects():
         if isinstance(obj, HourlyReport):
-
             msg = await ctx.channel.fetch_message(report_message_id)
-            await msg.delete()
+            await msg.delete()  # TODO: Refactor, it appears in other commands
 
             obj.comment = arg
             if obj.comment == '':
                 await bot.get_channel(CHANNEL_ADMIN).send(f'{obj.message_start}{obj.report}')
             else:
                 await bot.get_channel(CHANNEL_ADMIN).send(f'{obj.message_start}{obj.comment}\n\n{obj.report}')
+    await ctx.message.delete()
 
+
+@bot.command(name='reorder')
+@commands.has_role(ADMIN_ROLE)
+async def reorder(ctx, arg):
+    new_order = OrderedDict()
+    for obj in gc.get_objects():
+        if isinstance(obj, HourlyReport):
+            if len(arg) != len(obj.conflicts_active_order):
+                await bot.get_channel(ctx.channel).send(f'Learn how to count, noob!')
+            for num in range(1, len(obj.conflicts_active_order)+1):
+                if str(num) not in arg:
+                    await bot.get_channel(ctx.channel).send(f'Numbers, motherfucker, do you speak it?')
+
+            msg = await ctx.channel.fetch_message(report_message_id)
+            await msg.delete()
+
+            for num in arg:
+                for idx, conflict in enumerate(obj.conflicts_active_order):
+                    if idx+1 == int(num):
+                        new_order[conflict] = obj.conflicts_active_order[conflict]
+            obj.conflicts_active_order = new_order
+
+            obj.report_active(obj.cache)
+            obj.report_recovering(obj.cache)
+            obj.report_pending(obj.cache)
+
+            if obj.comment == '':
+                await bot.get_channel(CHANNEL_ADMIN).send(f'{obj.message_start}{obj.report}')
+            else:
+                await bot.get_channel(CHANNEL_ADMIN).send(f'{obj.message_start}{obj.comment}\n\n{obj.report}')
+    await ctx.message.delete()
+
+
+@bot.command(name='seen')
+@commands.has_role(ADMIN_ROLE)
+async def seen(ctx):
+    for obj in gc.get_objects():
+        if isinstance(obj, HourlyReport):
+            for i in obj.conflicts_active_order:
+                obj.conflicts_active_order[i]['score_us'] = obj.cache.conflicts_active[i]['score_us']
+                obj.conflicts_active_order[i]['score_them'] = obj.cache.conflicts_active[i]['score_them']
+                obj.conflicts_active_order[i]['updated_ago'] = obj.cache.conflicts_active[i]['updated_ago']
+                obj.conflicts_active_order[i]['new'] = False
+
+            msg = await ctx.channel.fetch_message(report_message_id)
+            await msg.delete()
+
+            obj.report_active(obj.cache)
+            obj.report_recovering(obj.cache)
+            obj.report_pending(obj.cache)
+
+            if obj.comment == '':
+                await bot.get_channel(CHANNEL_ADMIN).send(f'{obj.message_start}{obj.report}')
+            else:
+                await bot.get_channel(CHANNEL_ADMIN).send(f'{obj.message_start}{obj.comment}\n\n{obj.report}')
     await ctx.message.delete()
 
 
