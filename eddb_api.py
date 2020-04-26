@@ -18,6 +18,13 @@ req_uri = 'https://elitebgs.app/api/ebgs/v4/'
 class Cache:
     def faction_update(self):
         faction_json = requests.get(f"{req_uri}factions?name={req_faction}")
+
+        if faction_json.status_code != 200:
+            with open('EDO/err.log', 'a+') as err_log:
+                if DEBUG:
+                    print(f'Bad faction status code: {faction_json.status_code}')
+                err_log.write(f'{datetime.datetime.now()}, Bad faction status code: {faction_json.status_code}')
+
         faction_json_data = json.loads(faction_json.text)
 
         if DEBUG:

@@ -21,6 +21,8 @@ ADMIN_ROLE = os.getenv('ADMIN_ROLE')
 bot = commands.Bot(command_prefix='!')
 client = discord.Client()
 
+number_emoji = (':one:', ':two:', ':three:', ':four:', ':five:', ':six:', ':seven:', ':eight:', ':nine:', ':ten:')
+
 
 '''What I do on startup'''
 
@@ -37,9 +39,16 @@ async def on_ready():
 '''What I can do on my own'''
 
 
-async def purge(channel_to):
-    channel = bot.get_channel(channel_to)
-    await channel.purge()
+async def purge_own_messages(channel_to):
+    for message in await bot.get_channel(CHANNEL_ADMIN).history(limit=200).flatten():
+        if message.author == bot.user:
+            await message.delete()
+
+
+async def purge_commands(channel_to, command):
+    for message in await bot.get_channel(CHANNEL_ADMIN).history(limit=200).flatten():
+        if command in message.content:
+            await message.delete()
 
 
 @bot.event
@@ -113,9 +122,11 @@ class HourlyReport(commands.Cog):
                     else:
                         system = conflict
 
-                    self.report += '{0}: {1} in {2}\n' \
+                    num = number_emoji[idx+1]
+
+                    self.report += '{0} - {1} in {2}\n' \
                                    '{3} [ {4} - {5} ] {6}\n'.format(
-                                    idx+1,
+                                    num,
                                     cache.conflicts_active[conflict]["state"].capitalize(),
                                     system,
                                     FACTION_NAME,
@@ -190,7 +201,8 @@ class HourlyReport(commands.Cog):
 
         if DEBUG:
             print('Conflicts order:', self.conflicts_active_order)
-            await purge(CHANNEL_ADMIN)
+
+        await purge_own_messages(CHANNEL_ADMIN)
 
         if self.comment == '':  # TODO: Refactor, it appears in commands
             await bot.get_channel(CHANNEL_ADMIN).send(f'{self.message_start}{self.report}')
@@ -201,33 +213,39 @@ class HourlyReport(commands.Cog):
 '''Commands I understand'''
 
 
-@bot.command(name='comment')
+@bot.command(name='comment',
+             brief='Adds comment to the report, use wrap it into "" please',
+             description='Adds comment to the report, use wrap it into "" please')
 @commands.has_role(ADMIN_ROLE)
 async def comment(ctx, arg):
     for obj in gc.get_objects():
         if isinstance(obj, HourlyReport):
-            msg = await ctx.channel.fetch_message(report_message_id)
-            await msg.delete()  # TODO: Refactor, it appears in other commands
+            msg = await ctx.channel.fetch_message(report_message_id)    # TODO: Refactor, it appears in other commands
+            await msg.delete()
 
             obj.comment = arg
             if obj.comment == '':
                 await bot.get_channel(CHANNEL_ADMIN).send(f'{obj.message_start}{obj.report}')
             else:
                 await bot.get_channel(CHANNEL_ADMIN).send(f'{obj.message_start}{obj.comment}\n\n{obj.report}')
-    await ctx.message.delete()
+    await purge_commands(CHANNEL_ADMIN, '!comment')
 
 
-@bot.command(name='reorder')
+@bot.command(name='reorder',
+             brief='Reorders active conflicts. Use a set of numbers with no spaces.',
+             description='Reorders active conflicts. Use a set of numbers with no spaces.')
 @commands.has_role(ADMIN_ROLE)
 async def reorder(ctx, arg):
     new_order = OrderedDict()
     for obj in gc.get_objects():
         if isinstance(obj, HourlyReport):
             if len(arg) != len(obj.conflicts_active_order):
-                await bot.get_channel(ctx.channel).send(f'Learn how to count, noob!')
+                await bot.get_channel(CHANNEL_ADMIN).send(f'Learn how to count, noob!')
+                return
             for num in range(1, len(obj.conflicts_active_order)+1):
                 if str(num) not in arg:
-                    await bot.get_channel(ctx.channel).send(f'Numbers, motherfucker, do you speak it?')
+                    await bot.get_channel(CHANNEL_ADMIN).send(f'Numbers, motherfucker, do you speak it?')
+                    return
 
             msg = await ctx.channel.fetch_message(report_message_id)
             await msg.delete()
@@ -242,14 +260,18 @@ async def reorder(ctx, arg):
             obj.report_recovering(obj.cache)
             obj.report_pending(obj.cache)
 
+            await purge_own_messages(CHANNEL_ADMIN)
+
             if obj.comment == '':
                 await bot.get_channel(CHANNEL_ADMIN).send(f'{obj.message_start}{obj.report}')
             else:
                 await bot.get_channel(CHANNEL_ADMIN).send(f'{obj.message_start}{obj.comment}\n\n{obj.report}')
-    await ctx.message.delete()
+    await purge_commands(CHANNEL_ADMIN, '!reorder')
 
 
-@bot.command(name='seen')
+@bot.command(name='seen',
+             brief='Marks report as seen and removes highlights.',
+             description='Marks report as seen and removes highlights.')
 @commands.has_role(ADMIN_ROLE)
 async def seen(ctx):
     for obj in gc.get_objects():
@@ -271,7 +293,7 @@ async def seen(ctx):
                 await bot.get_channel(CHANNEL_ADMIN).send(f'{obj.message_start}{obj.report}')
             else:
                 await bot.get_channel(CHANNEL_ADMIN).send(f'{obj.message_start}{obj.comment}\n\n{obj.report}')
-    await ctx.message.delete()
+    await purge_commands(CHANNEL_ADMIN, '!seen')
 
 
 '''How I handle errors'''
@@ -289,8 +311,9 @@ async def on_command_error(ctx, error):     # Logs errors into 'err.log' file
     if isinstance(error, commands.errors.CheckFailure):
         await ctx.send('You do not have required role for this command.')
         with open('EDO/err.log', 'a+') as err_log:
-            print(f'{datetime.datetime.now()}, User: {ctx.author}\n'
-                  f'Command: {ctx.command}, Error: Role check failure\n')
+            if DEBUG:
+                print(f'{datetime.datetime.now()}, User: {ctx.author}\n'
+                      f'Command: {ctx.command}, Error: Role check failure\n')
             err_log.write(f'{datetime.datetime.now()}, User: {ctx.author}\n'
                           f'Command: {ctx.command}, Error: Role check failure\n')
 
