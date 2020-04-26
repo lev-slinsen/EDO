@@ -45,9 +45,9 @@ async def purge_own_messages(channel_to):
             await message.delete()
 
 
-async def purge_commands(channel_to, command):
+async def purge_commands(channel_to):
     for message in await bot.get_channel(CHANNEL_ADMIN).history(limit=200).flatten():
-        if command in message.content:
+        if message.content.startswith('!'):
             await message.delete()
 
 
@@ -214,8 +214,8 @@ class HourlyReport(commands.Cog):
 
 
 @bot.command(name='comment',
-             brief='Adds comment to the report, use wrap it into "" please',
-             description='Adds comment to the report, use wrap it into "" please')
+             brief='Adds comment to the report, wrap it into "".',
+             description='Adds comment to the report, use wrap it into "".')
 @commands.has_role(ADMIN_ROLE)
 async def comment(ctx, arg):
     for obj in gc.get_objects():
@@ -228,7 +228,7 @@ async def comment(ctx, arg):
                 await bot.get_channel(CHANNEL_ADMIN).send(f'{obj.message_start}{obj.report}')
             else:
                 await bot.get_channel(CHANNEL_ADMIN).send(f'{obj.message_start}{obj.comment}\n\n{obj.report}')
-    await purge_commands(CHANNEL_ADMIN, '!comment')
+    await purge_commands(CHANNEL_ADMIN)
 
 
 @bot.command(name='reorder',
@@ -266,7 +266,7 @@ async def reorder(ctx, arg):
                 await bot.get_channel(CHANNEL_ADMIN).send(f'{obj.message_start}{obj.report}')
             else:
                 await bot.get_channel(CHANNEL_ADMIN).send(f'{obj.message_start}{obj.comment}\n\n{obj.report}')
-    await purge_commands(CHANNEL_ADMIN, '!reorder')
+    await purge_commands(CHANNEL_ADMIN)
 
 
 @bot.command(name='seen',
@@ -276,11 +276,11 @@ async def reorder(ctx, arg):
 async def seen(ctx):
     for obj in gc.get_objects():
         if isinstance(obj, HourlyReport):
-            for i in obj.conflicts_active_order:
-                obj.conflicts_active_order[i]['score_us'] = obj.cache.conflicts_active[i]['score_us']
-                obj.conflicts_active_order[i]['score_them'] = obj.cache.conflicts_active[i]['score_them']
-                obj.conflicts_active_order[i]['updated_ago'] = obj.cache.conflicts_active[i]['updated_ago']
-                obj.conflicts_active_order[i]['new'] = False
+            for conflict in obj.conflicts_active_order:
+                obj.conflicts_active_order[conflict]['score_us'] = obj.cache.conflicts_active[conflict]['score_us']
+                obj.conflicts_active_order[conflict]['score_them'] = obj.cache.conflicts_active[conflict]['score_them']
+                obj.conflicts_active_order[conflict]['updated_ago'] = obj.cache.conflicts_active[conflict]['updated_ago']
+                obj.conflicts_active_order[conflict]['new'] = False
 
             msg = await ctx.channel.fetch_message(report_message_id)
             await msg.delete()
@@ -293,17 +293,10 @@ async def seen(ctx):
                 await bot.get_channel(CHANNEL_ADMIN).send(f'{obj.message_start}{obj.report}')
             else:
                 await bot.get_channel(CHANNEL_ADMIN).send(f'{obj.message_start}{obj.comment}\n\n{obj.report}')
-    await purge_commands(CHANNEL_ADMIN, '!seen')
+    await purge_commands(CHANNEL_ADMIN)
 
 
 '''How I handle errors'''
-
-
-@bot.event
-async def on_command_error(ctx, error):     # Hides 'command not found' errors in console
-    if isinstance(error, CommandNotFound):
-        return
-    raise error
 
 
 @bot.event
