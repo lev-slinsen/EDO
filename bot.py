@@ -12,7 +12,6 @@ from eddb_api import Cache
 load_dotenv()   # All environment variables are stored in '.env' file
 TOKEN = os.getenv('DISCORD_TOKEN')
 DEBUG = os.getenv('DEBUG')
-FACTION_NAME = os.getenv('FACTION_NAME')
 CHANNEL_ADMIN = int(os.getenv('CHANNEL_ADMIN'))
 ADMIN_ROLE = os.getenv('ADMIN_ROLE')
 
@@ -66,7 +65,7 @@ async def on_message(message):
     await bot.process_commands(message)
 
 
-class HourlyReport(commands.Cog):
+class HourlyReport:
     def __init__(self, bot):
         self.bot = bot
         self.conflicts_active_order = OrderedDict()
@@ -91,7 +90,7 @@ class HourlyReport(commands.Cog):
         self.report = ''
 
         if len(cache.conflicts_active) == 0:
-            self.report += f'Our kingdom is at peace! (for now)\n\n'
+            self.report += f'Our Empire is at peace (for now).\n\n'
         else:
             for conflict in cache.conflicts_active:
                 if conflict not in self.conflicts_active_order:
@@ -131,7 +130,7 @@ class HourlyReport(commands.Cog):
                                     num,
                                     cache.conflicts_active[conflict]["state"].capitalize(),
                                     system,
-                                    self.cache.faction,
+                                    os.getenv('FACTION_NAME'),
                                     score_us,
                                     score_them,
                                     cache.conflicts_active[conflict]["opponent"],
@@ -270,13 +269,12 @@ async def seen(ctx):
 @commands.has_role(ADMIN_ROLE)
 async def faction(ctx, arg):
     await bot.get_channel(CHANNEL_ADMIN).send(f'Loading...')
-    hr.cache.faction = 'Inara Nexus'
+    os.environ['FACTION_NAME'] = arg
     hr.report_loop.cancel()     # object NoneType can't be used in 'await' expression
     await asyncio.sleep(2)      # TODO: fix this with a proper await
     await bot_start()
 
     await purge_commands(CHANNEL_ADMIN)
-    print(hr.cache.faction)
 
 
 bot.run(TOKEN)
