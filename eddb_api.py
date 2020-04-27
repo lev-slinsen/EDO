@@ -11,6 +11,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 DEBUG = os.getenv('DEBUG')
+FACTION_NAME = os.getenv('FACTION_NAME').lower()
 
 
 req_uri = 'https://elitebgs.app/api/ebgs/v4/'
@@ -18,9 +19,7 @@ req_uri = 'https://elitebgs.app/api/ebgs/v4/'
 
 class Cache:
     def faction_update(self):
-        global FACTION_NAME
-        FACTION_NAME = os.getenv('FACTION_NAME').lower()
-        req_faction = FACTION_NAME.replace(' ', '%20')
+        req_faction = self.faction.replace(' ', '%20')
 
         faction_json = requests.get(f"{req_uri}factions?name={req_faction}")
 
@@ -64,11 +63,11 @@ class Cache:
                         if (
                                 conflict['status'] == 'active' and
                                 (
-                                        conflict['faction1']['name_lower'] == FACTION_NAME or
-                                        conflict['faction2']['name_lower'] == FACTION_NAME
+                                        conflict['faction1']['name_lower'] == self.faction or
+                                        conflict['faction2']['name_lower'] == self.faction
                                 )
                         ):
-                            if conflict['faction1']['name_lower'] == FACTION_NAME:
+                            if conflict['faction1']['name_lower'] == self.faction:
                                 us = 'faction1'
                                 them = 'faction2'
                             else:
@@ -102,7 +101,7 @@ class Cache:
 
                     for opp_system in opp_faction_json_data['docs'][0]['faction_presence']:
                         if opp_system['conflicts']:
-                            if opp_system['conflicts'][0]['opponent_name_lower'] == FACTION_NAME:
+                            if opp_system['conflicts'][0]['opponent_name_lower'] == self.faction:
                                 days_won = system['conflicts'][0]['days_won']
                                 opp_days_won = opp_system['conflicts'][0]['days_won']
                                 if days_won > opp_days_won:
@@ -135,7 +134,7 @@ class Cache:
 
                     for opp_system in opp_faction_json_data['docs'][0]['faction_presence']:
                         if opp_system['conflicts']:
-                            if opp_system['conflicts'][0]['opponent_name_lower'] == FACTION_NAME:
+                            if opp_system['conflicts'][0]['opponent_name_lower'] == self.faction:
                                 report[system['system_name']] = {
                                     'state': system['conflicts'][0]['type'],
                                     'win': opp_system['conflicts'][0]['stake'],
@@ -147,6 +146,7 @@ class Cache:
         return report
 
     def __init__(self):
+        self.faction = FACTION_NAME
         self.faction_data = self.faction_update()
         self.conflicts_active = self.get_conflicts_active(self.faction_data)
         self.conflicts_recovering = self.get_conflicts_recovering(self.faction_data)

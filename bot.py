@@ -31,7 +31,6 @@ async def on_ready():
     print(f'{bot.user.name} is connected to the following guilds:')
     for guild in bot.guilds:
         print(f'"{guild.name}" with id: {guild.id}\n')
-
     await bot_start()
 
 
@@ -132,7 +131,7 @@ class HourlyReport(commands.Cog):
                                     num,
                                     cache.conflicts_active[conflict]["state"].capitalize(),
                                     system,
-                                    FACTION_NAME,
+                                    self.cache.faction,
                                     score_us,
                                     score_them,
                                     cache.conflicts_active[conflict]["opponent"],
@@ -194,10 +193,9 @@ class HourlyReport(commands.Cog):
                                f'{self.updated_ago_text(cache.conflicts_pending[conflict]["updated_ago"])}\n\n'
 
     async def report_print(self):
-        cache = self.cache
-        self.report_active(cache)
-        self.report_recovering(cache)
-        self.report_pending(cache)
+        self.report_active(self.cache)
+        self.report_recovering(self.cache)
+        self.report_pending(self.cache)
 
         await purge_own_messages(CHANNEL_ADMIN)
 
@@ -216,8 +214,8 @@ class HourlyReport(commands.Cog):
 
 
 @bot.command(name='comment',
-             brief='Adds comment to the report, wrap it into "".',
-             description='Adds comment to the report, use wrap it into "".')
+             brief='Adds comment to the report, wrap it into ""',
+             description='Adds comment to the report, use wrap it into ""')
 @commands.has_role(ADMIN_ROLE)
 async def comment(ctx, arg):
     hr.comment = arg
@@ -226,9 +224,9 @@ async def comment(ctx, arg):
     await purge_commands(CHANNEL_ADMIN)
 
 
-@bot.command(name='reorder',
-             brief='Reorders active conflicts. Use a set of numbers with no spaces.',
-             description='Reorders active conflicts. Use a set of numbers with no spaces.')
+@bot.command(name='order',
+             brief='Reorders active conflicts. Use a set of numbers with no spaces',
+             description='Reorders active conflicts. Use a set of numbers with no spaces')
 @commands.has_role(ADMIN_ROLE)
 async def reorder(ctx, arg):
     new_order = OrderedDict()
@@ -252,8 +250,8 @@ async def reorder(ctx, arg):
 
 
 @bot.command(name='seen',
-             brief='Marks report as seen and removes highlights.',
-             description='Marks report as seen and removes highlights.')
+             brief='Marks report as seen and removes highlights',
+             description='Marks report as seen and removes highlights')
 @commands.has_role(ADMIN_ROLE)
 async def seen(ctx):
     for conflict in hr.conflicts_active_order:
@@ -266,15 +264,19 @@ async def seen(ctx):
     await purge_commands(CHANNEL_ADMIN)
 
 
-@bot.command(name='faction')
+@bot.command(name='faction',
+             brief='Changes the followed faction, wrap it into ""',
+             description='Changes the followed faction')
 @commands.has_role(ADMIN_ROLE)
 async def faction(ctx, arg):
+    await bot.get_channel(CHANNEL_ADMIN).send(f'Loading...')
+    hr.cache.faction = 'Inara Nexus'
     hr.report_loop.cancel()     # object NoneType can't be used in 'await' expression
     await asyncio.sleep(2)      # TODO: fix this with a proper await
-    os.environ['FACTION_NAME'] = arg
     await bot_start()
 
     await purge_commands(CHANNEL_ADMIN)
+    print(hr.cache.faction)
 
 
 bot.run(TOKEN)
