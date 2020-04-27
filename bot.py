@@ -213,11 +213,11 @@ class HourlyReport:
 
 
 @bot.command(name='comment',
-             brief='Adds comment to the report, wrap it into ""',
-             description='Adds comment to the report, use wrap it into ""')
+             brief='Adds comment to the report',
+             description='Adds comment to the report')
 @commands.has_role(ADMIN_ROLE)
-async def comment(ctx, arg):
-    hr.comment = arg
+async def comment(ctx, *args):
+    hr.comment = (' '.join(args))
 
     await hr.report_print()
     await purge_commands(CHANNEL_ADMIN)
@@ -230,12 +230,13 @@ async def comment(ctx, arg):
 async def reorder(ctx, arg):
     new_order = OrderedDict()
     if len(arg) != len(hr.conflicts_active_order):
-        await bot.get_channel(CHANNEL_ADMIN).send(f'Learn how to count, noob!')
+        await bot.get_channel(CHANNEL_ADMIN).send(f'There are {len(hr.conflicts_active_order)} active conflicts. '
+                                                  f'Please try again.')
         return
 
     for num in range(1, len(hr.conflicts_active_order)+1):
         if str(num) not in arg:
-            await bot.get_channel(CHANNEL_ADMIN).send(f'Numbers, motherfucker, do you speak it?')
+            await bot.get_channel(CHANNEL_ADMIN).send(f'Typo?')
             return
 
     for num in arg:
@@ -264,12 +265,12 @@ async def seen(ctx):
 
 
 @bot.command(name='faction',
-             brief='Changes the followed faction, wrap it into ""',
+             brief='Changes the followed faction',
              description='Changes the followed faction')
 @commands.has_role(ADMIN_ROLE)
-async def faction(ctx, arg):
+async def faction(ctx, *args):
     await bot.get_channel(CHANNEL_ADMIN).send(f'Loading...')
-    os.environ['FACTION_NAME'] = arg
+    os.environ['FACTION_NAME'] = (' '.join(args))
     hr.report_loop.cancel()     # object NoneType can't be used in 'await' expression
     await asyncio.sleep(2)      # TODO: fix this with a proper await
     await bot_start()
