@@ -20,7 +20,8 @@ ADMIN_ROLE = os.getenv('ADMIN_ROLE')
 bot = commands.Bot(command_prefix='!')
 client = discord.Client()
 
-number_emoji = (':zero:', ':one:', ':two:', ':three:', ':four:', ':five:', ':six:', ':seven:', ':eight:', ':nine:', ':ten:')
+number_emoji = (':zero:', ':one:', ':two:', ':three:', ':four:', ':five:',
+                ':six:', ':seven:', ':eight:', ':nine:', ':ten:')
 
 
 '''What I do on startup'''
@@ -32,7 +33,9 @@ async def on_ready():
     for guild in bot.guilds:
         print(f'"{guild.name}" with id: {guild.id}\n')
 
-    HourlyReport(bot).send_report.start()
+    global hr
+    hr = HourlyReport(bot)
+    hr.report_loop.start()
 
 
 '''What I can do on my own'''
@@ -189,7 +192,7 @@ class HourlyReport(commands.Cog):
                 self.report += f'Last updated: ' \
                                f'{self.updated_ago_text(cache.conflicts_pending[conflict]["updated_ago"])}\n\n'
 
-    async def print_report(self):
+    async def report_print(self):
         cache = self.cache
         self.report_active(cache)
         self.report_recovering(cache)
@@ -203,9 +206,9 @@ class HourlyReport(commands.Cog):
             await bot.get_channel(CHANNEL_ADMIN).send(f'{self.message_start}{self.comment}\n\n{self.report}')
 
     @tasks.loop(minutes=30)
-    async def send_report(self):
+    async def report_loop(self):
         self.cache = Cache()
-        await self.print_report()
+        await self.report_print()
 
 
 '''Commands I understand'''
@@ -216,11 +219,9 @@ class HourlyReport(commands.Cog):
              description='Adds comment to the report, use wrap it into "".')
 @commands.has_role(ADMIN_ROLE)
 async def comment(ctx, arg):
-    for obj in gc.get_objects():
-        if isinstance(obj, HourlyReport):
-            obj.comment = arg
+    hr.comment = arg
 
-            await obj.print_report()
+    await hr.report_print()
     await purge_commands(CHANNEL_ADMIN)
 
 
@@ -230,24 +231,22 @@ async def comment(ctx, arg):
 @commands.has_role(ADMIN_ROLE)
 async def reorder(ctx, arg):
     new_order = OrderedDict()
-    for obj in gc.get_objects():
-        if isinstance(obj, HourlyReport):
-            if len(arg) != len(obj.conflicts_active_order):
-                await bot.get_channel(CHANNEL_ADMIN).send(f'Learn how to count, noob!')
-                return
+    if len(arg) != len(hr.conflicts_active_order):
+        await bot.get_channel(CHANNEL_ADMIN).send(f'Learn how to count, noob!')
+        return
 
-            for num in range(1, len(obj.conflicts_active_order)+1):
-                if str(num) not in arg:
-                    await bot.get_channel(CHANNEL_ADMIN).send(f'Numbers, motherfucker, do you speak it?')
-                    return
+    for num in range(1, len(hr.conflicts_active_order)+1):
+        if str(num) not in arg:
+            await bot.get_channel(CHANNEL_ADMIN).send(f'Numbers, motherfucker, do you speak it?')
+            return
 
-            for num in arg:
-                for idx, conflict in enumerate(obj.conflicts_active_order):
-                    if idx+1 == int(num):
-                        new_order[conflict] = obj.conflicts_active_order[conflict]
-            obj.conflicts_active_order = new_order
+    for num in arg:
+        for idx, conflict in enumerate(hr.conflicts_active_order):
+            if idx+1 == int(num):
+                new_order[conflict] = hr.conflicts_active_order[conflict]
+    hr.conflicts_active_order = new_order
 
-            await obj.print_report()
+    await hr.report_print()
     await purge_commands(CHANNEL_ADMIN)
 
 
@@ -256,31 +255,14 @@ async def reorder(ctx, arg):
              description='Marks report as seen and removes highlights.')
 @commands.has_role(ADMIN_ROLE)
 async def seen(ctx):
-    for obj in gc.get_objects():
-        if isinstance(obj, HourlyReport):
-            for conflict in obj.conflicts_active_order:
-                obj.conflicts_active_order[conflict]['score_us'] = obj.cache.conflicts_active[conflict]['score_us']
-                obj.conflicts_active_order[conflict]['score_them'] = obj.cache.conflicts_active[conflict]['score_them']
-                obj.conflicts_active_order[conflict]['updated_ago'] = obj.cache.conflicts_active[conflict]['updated_ago']
-                obj.conflicts_active_order[conflict]['new'] = False
+    for conflict in hr.conflicts_active_order:
+        hr.conflicts_active_order[conflict]['score_us'] = hr.cache.conflicts_active[conflict]['score_us']
+        hr.conflicts_active_order[conflict]['score_them'] = hr.cache.conflicts_active[conflict]['score_them']
+        hr.conflicts_active_order[conflict]['updated_ago'] = hr.cache.conflicts_active[conflict]['updated_ago']
+        hr.conflicts_active_order[conflict]['new'] = False
 
-            await obj.print_report()
+    await hr.report_print()
     await purge_commands(CHANNEL_ADMIN)
-
-
-'''How I handle errors'''
-
-
-@bot.event
-async def on_command_error(ctx, error):     # Logs errors into 'err.log' file
-    if isinstance(error, commands.errors.CheckFailure):
-        await ctx.send('You do not have required role for this command.')
-        with open('EDO/err.log', 'a+') as err_log:
-            if DEBUG:
-                print(f'{datetime.datetime.now()}, User: {ctx.author}\n'
-                      f'Command: {ctx.command}, Error: Role check failure\n')
-            err_log.write(f'{datetime.datetime.now()}, User: {ctx.author}\n'
-                          f'Command: {ctx.command}, Error: Role check failure\n')
 
 
 bot.run(TOKEN)

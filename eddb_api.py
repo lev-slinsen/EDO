@@ -7,6 +7,8 @@ import pytz
 import requests
 from dotenv import load_dotenv
 
+# TODO: aiohttp for requests
+
 load_dotenv()
 FACTION_NAME = os.getenv('FACTION_NAME').lower()
 DEBUG = os.getenv('DEBUG')
