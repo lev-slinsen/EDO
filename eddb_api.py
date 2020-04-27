@@ -10,15 +10,18 @@ from dotenv import load_dotenv
 # TODO: aiohttp for requests
 
 load_dotenv()
-FACTION_NAME = os.getenv('FACTION_NAME').lower()
 DEBUG = os.getenv('DEBUG')
 
-req_faction = FACTION_NAME.replace(' ', '%20')
+
 req_uri = 'https://elitebgs.app/api/ebgs/v4/'
 
 
 class Cache:
     def faction_update(self):
+        global FACTION_NAME
+        FACTION_NAME = os.getenv('FACTION_NAME').lower()
+        req_faction = FACTION_NAME.replace(' ', '%20')
+
         faction_json = requests.get(f"{req_uri}factions?name={req_faction}")
 
         if faction_json.status_code != 200:
@@ -34,8 +37,8 @@ class Cache:
 
         if not faction_json_data['docs']:
             with open('err.log', 'a+') as err_log:
-                print(f'{datetime.datetime.now()}, Bad faction name: {req_faction}')
-                err_log.write(f'{datetime.datetime.now()}, Bad faction name: {req_faction}')
+                print(f'{datetime.now()}, Bad faction name: {req_faction}')
+                err_log.write(f'{datetime.now()}, Bad faction name: {req_faction}')
 
         return faction_json_data
 

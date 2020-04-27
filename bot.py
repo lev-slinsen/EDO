@@ -1,5 +1,4 @@
-import datetime
-import gc
+import asyncio
 import os
 from collections import OrderedDict
 
@@ -33,12 +32,16 @@ async def on_ready():
     for guild in bot.guilds:
         print(f'"{guild.name}" with id: {guild.id}\n')
 
-    global hr
-    hr = HourlyReport(bot)
-    hr.report_loop.start()
+    await bot_start()
 
 
 '''What I can do on my own'''
+
+
+async def bot_start():
+    global hr
+    hr = HourlyReport(bot)
+    hr.report_loop.start()
 
 
 async def purge_own_messages(channel_to):
@@ -55,14 +58,12 @@ async def purge_commands(channel_to):
 
 @bot.event
 async def on_message(message):
-    for obj in gc.get_objects():
-        if isinstance(obj, HourlyReport):
-            if (
-                    message.author == bot.user and
-                    obj.message_start in message.content
-            ):
-                global report_message_id
-                report_message_id = message.id
+    if (
+            message.author == bot.user and
+            hr.message_start in message.content
+    ):
+        global report_message_id
+        report_message_id = message.id
     await bot.process_commands(message)
 
 
@@ -262,6 +263,17 @@ async def seen(ctx):
         hr.conflicts_active_order[conflict]['new'] = False
 
     await hr.report_print()
+    await purge_commands(CHANNEL_ADMIN)
+
+
+@bot.command(name='faction')
+@commands.has_role(ADMIN_ROLE)
+async def faction(ctx, arg):
+    hr.report_loop.cancel()     # object NoneType can't be used in 'await' expression
+    await asyncio.sleep(2)      # TODO: fix this with a proper await
+    os.environ['FACTION_NAME'] = arg
+    await bot_start()
+
     await purge_commands(CHANNEL_ADMIN)
 
 
