@@ -69,22 +69,10 @@ class HourlyReport:
     def __init__(self, bot):
         self.bot = bot
         self.conflicts_active_order = OrderedDict()
-        self.message_start = 'Conflicts report:\n\n'
+        self.message_start = f'Conflicts report for {os.getenv("FACTION_NAME")}:\n\n'
         self.comment = ''
         self.report = ''
         self.report_message_id = 0
-
-    def updated_ago_text(self, updated_ago):
-        if (
-                updated_ago[-2:] == '1' or
-                updated_ago[-2:] == '21'
-        ):
-            text = f'{updated_ago} hour ago.'
-        elif updated_ago[-2:] == '0':
-            text = 'less than an hour ago.'
-        else:
-            text = f'{updated_ago} hours ago.'
-        return text
 
     def report_active(self, cache):
         self.report = ''
@@ -142,8 +130,7 @@ class HourlyReport:
                     if cache.conflicts_active[conflict]['loss']:
                         self.report += f'On defeat we lose: {cache.conflicts_active[conflict]["loss"]}\n'
 
-                    self.report += f'Last updated: ' \
-                                   f'{self.updated_ago_text(cache.conflicts_active[conflict]["updated_ago"])}\n\n'
+                    self.report += f'Last updated: {cache.conflicts_active[conflict]["updated_ago"]}\n\n'
 
     def report_recovering(self, cache):
         if len(cache.conflicts_recovering) == 0:
@@ -167,8 +154,7 @@ class HourlyReport:
                         self.report += f'We lost {stake}\n'
                 else:
                     self.report += '\n'
-                self.report += f'Last updated: ' \
-                               f'{self.updated_ago_text(cache.conflicts_recovering[conflict]["updated_ago"])}\n\n'
+                self.report += f'Last updated: {cache.conflicts_recovering[conflict]["updated_ago"]}\n\n'
 
     def report_pending(self, cache):
         if len(cache.conflicts_pending) == 0:
@@ -188,8 +174,7 @@ class HourlyReport:
                 if cache.conflicts_pending[conflict]['loss']:
                     self.report += f'On defeat we lose: {cache.conflicts_pending[conflict]["loss"]}\n'
 
-                self.report += f'Last updated: ' \
-                               f'{self.updated_ago_text(cache.conflicts_pending[conflict]["updated_ago"])}\n\n'
+                self.report += f'Last updated: {cache.conflicts_pending[conflict]["updated_ago"]}\n\n'
 
     async def report_print(self):
         self.report_active(self.cache)
@@ -227,7 +212,7 @@ async def comment(ctx, *args):
              brief='Reorders active conflicts. Use a set of numbers with no spaces',
              description='Reorders active conflicts. Use a set of numbers with no spaces')
 @commands.has_role(ADMIN_ROLE)
-async def reorder(ctx, arg):
+async def order(ctx, arg):
     new_order = OrderedDict()
     if len(arg) != len(hr.conflicts_active_order):
         await bot.get_channel(CHANNEL_ADMIN).send(f'There are {len(hr.conflicts_active_order)} active conflicts. '

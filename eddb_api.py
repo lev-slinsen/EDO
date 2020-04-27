@@ -8,6 +8,7 @@ import requests
 from dotenv import load_dotenv
 
 # TODO: aiohttp for requests
+# TODO: track systems unvisited in last 2 days
 
 load_dotenv()
 DEBUG = os.getenv('DEBUG')
@@ -44,7 +45,51 @@ class Cache:
         frontier_time = datetime.now(frontier_tz)
         updated_at = frontier_tz.localize(datetime.strptime(api_updated_at[0:16], '%Y-%m-%dT%H:%M'))
         updated_ago = str(frontier_time - updated_at)[:-13]
-        return updated_ago
+        if (
+                updated_ago[-2:] == '1' or
+                updated_ago[-2:] == '21'
+        ):
+            text = f'{updated_ago} hour ago.'
+        elif updated_ago[-2:] == '0':
+            text = 'less than an hour ago.'
+        else:
+            text = f'{updated_ago} hours ago.'
+        return text
+
+    def stake(self, station):
+        if (
+                station and
+                station not in self.stations
+        ):
+            station_name = station.replace(' ', '%20')
+            station_json = requests.get(f"{req_uri}stations?name={station_name}")
+            station_json_data = json.loads(station_json.text)
+            if DEBUG:
+                print(f'  > Station data: {station_json_data}')
+            if station_json_data['total'] == 0:
+                self.stations[station] = 'Installation'
+            else:
+                distance = round(station_json_data["docs"][0]["distance_from_star"], 1)
+                if station_json_data['docs'][0]['type'] in ('coriolis', 'coriolis starport'):
+                    self.stations[station] = f'Coriolis starport - L pad, {distance} Ls'
+                elif station_json_data['docs'][0]['type'] in ('bernal', 'ocellus starport'):
+                    self.stations[station] = f'Ocellus starport - L pad, {distance} Ls'
+                elif station_json_data['docs'][0]['type'] in ('orbis', 'orbis starport'):
+                    self.stations[station] = f'Orbis starport - L pad, {distance} Ls'
+                elif station_json_data['docs'][0]['type'] in ('crateroutpost', 'surfacestation',
+                                                              'planetary outpost', 'planetary port', 'craterport'):
+                    self.stations[station] = f'Surface station - L pad, {distance} Ls'
+                elif station_json_data['docs'][0]['type'] == 'asteroidbase':
+                    self.stations[station] = f'Asteroid base - L pad, {distance} Ls'
+                elif station_json_data['docs'][0]['type'] == 'megaship':
+                    self.stations[station] = f'Megaship - L pad, {distance} Ls'
+                elif station_json_data['docs'][0]['type'][-7:] == 'outpost':
+                    self.stations[station] = f'Orbis starport - M pad, {distance} Ls'
+
+            text = f'{station} ({self.stations[station]})'
+        elif station == '':
+            text = ''
+        return text
 
     def get_conflicts_active(self, faction_data):
         report = {}
@@ -77,8 +122,8 @@ class Cache:
                                 'opponent': conflict[them]['name'],
                                 'score_us': conflict[us]['days_won'],
                                 'score_them': conflict[them]['days_won'],
-                                'win': conflict[them]['stake'],
-                                'loss': conflict[us]['stake'],
+                                'win': self.stake(conflict[them]['stake']),
+                                'loss': self.stake(conflict[us]['stake']),
                                 'updated_ago': self.updated_ago(system['updated_at'])
                             }
         if DEBUG:
@@ -135,8 +180,8 @@ class Cache:
                             if opp_system['conflicts'][0]['opponent_name_lower'] == self.FACTION_NAME:
                                 report[system['system_name']] = {
                                     'state': system['conflicts'][0]['type'],
-                                    'win': opp_system['conflicts'][0]['stake'],
-                                    'loss': system['conflicts'][0]['stake'],
+                                    'win': self.stake(opp_system['conflicts'][0]['stake']),
+                                    'loss': self.stake(system['conflicts'][0]['stake']),
                                     'updated_ago': self.updated_ago(system['updated_at'])
                                 }
         if DEBUG:
@@ -144,6 +189,7 @@ class Cache:
         return report
 
     def __init__(self):
+        self.stations = {}
         self.faction_data = self.faction_update()
         self.conflicts_active = self.get_conflicts_active(self.faction_data)
         self.conflicts_recovering = self.get_conflicts_recovering(self.faction_data)
