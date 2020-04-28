@@ -9,6 +9,9 @@ from dotenv import load_dotenv
 
 from eddb_api import Cache
 
+# TODO: aiohttp for requests
+# TODO: add logging
+
 load_dotenv()   # All environment variables are stored in '.env' file
 TOKEN = os.getenv('DISCORD_TOKEN')
 DEBUG = os.getenv('DEBUG')
@@ -176,10 +179,27 @@ class HourlyReport:
 
                 self.report += f'Last updated: {cache.conflicts_pending[conflict]["updated_ago"]}\n\n'
 
+    def unvisited_systems(self, data):
+        report = 'List of unvisited systems:\n'
+        for day in data:
+            if day == 7:
+                report += f':exclamation:**A week or more**: {data[day]}'
+            elif data[day]:
+                report += f'{day} days: {data[day]}\n'
+
+        if report[-26:] == 'List of unchecked systems:':
+            report.replace('List of unchecked systems:', '')
+
+        to_replace = ('[', ']', "'")
+        for symbol in to_replace:
+            report = report.replace(symbol, '')
+        self.report += report
+
     async def report_print(self):
         self.report_active(self.cache)
         self.report_recovering(self.cache)
         self.report_pending(self.cache)
+        self.unvisited_systems(self.cache.unvisited_systems)
 
         await purge_own_messages(CHANNEL_ADMIN)
 
@@ -192,6 +212,8 @@ class HourlyReport:
     async def report_loop(self):
         self.cache = Cache()
         await self.report_print()
+
+        await purge_commands(CHANNEL_ADMIN)
 
 
 '''Commands I understand'''
@@ -254,10 +276,10 @@ async def seen(ctx):
              description='Changes the followed faction')
 @commands.has_role(ADMIN_ROLE)
 async def faction(ctx, *args):
-    await bot.get_channel(CHANNEL_ADMIN).send(f'Loading...')
+    await bot.get_channel(CHANNEL_ADMIN).send(f'Working...')
     os.environ['FACTION_NAME'] = (' '.join(args))
     hr.report_loop.cancel()     # object NoneType can't be used in 'await' expression
-    await asyncio.sleep(2)      # TODO: fix this with a proper await
+    await asyncio.sleep(3)      # TODO: fix this with a proper await
     await bot_start()
 
     await purge_commands(CHANNEL_ADMIN)

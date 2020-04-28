@@ -2,22 +2,22 @@ import datetime
 import json
 import os
 from datetime import datetime
+from datetime import timedelta
 
 import pytz
 import requests
 from dotenv import load_dotenv
 
-# TODO: aiohttp for requests
-# TODO: track systems unvisited in last 2 days
-
 load_dotenv()
 DEBUG = os.getenv('DEBUG')
 
 req_uri = 'https://elitebgs.app/api/ebgs/v4/'
+frontier_tz = pytz.timezone('UTC')
 
 
 class Cache:
     def faction_update(self):
+        frontier_time = datetime.now(frontier_tz)
         self.FACTION_NAME = os.getenv('FACTION_NAME').lower()
         req_faction = self.FACTION_NAME.replace(' ', '%20')
         faction_json = requests.get(f"{req_uri}factions?name={req_faction}")
@@ -35,13 +35,12 @@ class Cache:
 
         if not faction_json_data['docs']:
             with open('err.log', 'a+') as err_log:
-                print(f'{datetime.now()}, Bad faction name: {req_faction}')
-                err_log.write(f'{datetime.now()}, Bad faction name: {req_faction}')
+                print(f'{frontier_time}, Bad faction name: {req_faction}')
+                err_log.write(f'{frontier_time}, Bad faction name: {req_faction}')
 
         return faction_json_data
 
     def updated_ago(self, api_updated_at):
-        frontier_tz = pytz.timezone('UTC')
         frontier_time = datetime.now(frontier_tz)
         updated_at = frontier_tz.localize(datetime.strptime(api_updated_at[0:16], '%Y-%m-%dT%H:%M'))
         updated_ago = str(frontier_time - updated_at)[:-13]
@@ -185,7 +184,22 @@ class Cache:
                                     'updated_ago': self.updated_ago(system['updated_at'])
                                 }
         if DEBUG:
-            print('Cached conflicts_pending:', report, '\n')
+            print('Cached conflicts_pending:', report)
+        return report
+
+    def get_unvisited_systems(self, faction_data):
+        frontier_time = datetime.now(frontier_tz)
+        report = {2: [], 3: [], 4: [], 5: [], 6: [], 7: []}
+        for system in faction_data['docs'][0]['faction_presence']:
+            updated_ago = (frontier_time -
+                           frontier_tz.localize(datetime.strptime(system['updated_at'][0:16], '%Y-%m-%dT%H:%M')))
+            for day in report:
+                if timedelta(days=day+1) > updated_ago > timedelta(days=day):
+                    report[day].append(system['system_name'])
+            if updated_ago > timedelta(days=7):
+                report[7].append(system['system_name'])
+        if DEBUG:
+            print('Cached unvisited_systems:', report, '\n')
         return report
 
     def __init__(self):
@@ -194,6 +208,7 @@ class Cache:
         self.conflicts_active = self.get_conflicts_active(self.faction_data)
         self.conflicts_recovering = self.get_conflicts_recovering(self.faction_data)
         self.conflicts_pending = self.get_conflicts_pending(self.faction_data)
+        self.unvisited_systems = self.get_unvisited_systems(self.faction_data)
 
     def __call__(self):
         return (self.conflicts_active,
