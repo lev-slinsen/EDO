@@ -74,10 +74,11 @@ class HourlyReport:
         self.conflicts_active_order = OrderedDict()
         self.message_start = f'Conflicts report for {os.getenv("FACTION_NAME")}:\n\n'
         self.comment = ''
+        self.event = ''
         self.report = ''
         self.report_message_id = 0
 
-    def report_active(self, cache):
+    def report_active(self, cache, number):
         self.report = ''
 
         if len(cache.conflicts_active) == 0:
@@ -97,24 +98,21 @@ class HourlyReport:
                 if conflict not in cache.conflicts_active:
                     self.conflicts_active_order.pop(conflict)
                 else:
+                    score_us = cache.conflicts_active[conflict]["score_us"]
                     if cache.conflicts_active[conflict]['score_us'] != \
                             self.conflicts_active_order[conflict]['score_us']:
                         score_us = f'**{cache.conflicts_active[conflict]["score_us"]}**'
-                    else:
-                        score_us = cache.conflicts_active[conflict]["score_us"]
 
+                    score_them = cache.conflicts_active[conflict]["score_them"]
                     if cache.conflicts_active[conflict]['score_them'] != \
                             self.conflicts_active_order[conflict]['score_them']:
                         score_them = f'**{cache.conflicts_active[conflict]["score_them"]}**'
-                    else:
-                        score_them = cache.conflicts_active[conflict]["score_them"]
 
+                    system = conflict
                     if self.conflicts_active_order[conflict]['new']:
                         system = f'**{conflict}**:exclamation:'
-                    else:
-                        system = conflict
 
-                    num = number_emoji[idx+1]
+                    num = number_emoji[idx+number]
 
                     self.report += '{0} - {1} in {2}\n' \
                                    '{3} [ {4} - {5} ] {6}\n'.format(
@@ -195,23 +193,29 @@ class HourlyReport:
             report = report.replace(symbol, '')
         self.report += report
 
-    async def report_print(self):
-        self.report_active(self.cache)
+    async def report_send(self):
+        number = 1
+        if self.event:
+            number = 2
+        self.report_active(self.cache, number)
         self.report_recovering(self.cache)
         self.report_pending(self.cache)
         self.unvisited_systems(self.cache.unvisited_systems)
 
         await purge_own_messages(CHANNEL_ADMIN)
 
-        if self.comment == '':
-            await bot.get_channel(CHANNEL_ADMIN).send(f'{self.message_start}{self.report}')
-        else:
-            await bot.get_channel(CHANNEL_ADMIN).send(f'{self.message_start}{self.comment}\n\n{self.report}')
+        report = self.message_start
+        if self.comment:
+            report += f'{self.comment}\n\n'
+        if self.event:
+            report += f':one: - {self.event}\n\n'
+        report += self.report
+        await bot.get_channel(CHANNEL_ADMIN).send(report)
 
     @tasks.loop(minutes=30)
     async def report_loop(self):
         self.cache = Cache()
-        await self.report_print()
+        await self.report_send()
 
         await purge_commands(CHANNEL_ADMIN)
 
@@ -221,18 +225,30 @@ class HourlyReport:
 
 @bot.command(name='comment',
              brief='Adds comment to the report',
-             description='Adds comment to the report')
+             description='Adds text at the top of the report.')
 @commands.has_role(ADMIN_ROLE)
 async def comment(ctx, *args):
     hr.comment = (' '.join(args))
 
-    await hr.report_print()
+    await hr.report_send()
+    await purge_commands(CHANNEL_ADMIN)
+
+
+@bot.command(name='event',
+             brief='Adds event to the report',
+             description='Adds text after comment and before active conflicts to the report. '
+                         'Marks it as the first objective.')
+@commands.has_role(ADMIN_ROLE)
+async def comment(ctx, *args):
+    hr.event = (' '.join(args))
+
+    await hr.report_send()
     await purge_commands(CHANNEL_ADMIN)
 
 
 @bot.command(name='order',
-             brief='Reorders active conflicts. Use a set of numbers with no spaces',
-             description='Reorders active conflicts. Use a set of numbers with no spaces')
+             brief='Reorders active conflicts',
+             description='Reorders active conflicts. Use a set of numbers with no spaces.')
 @commands.has_role(ADMIN_ROLE)
 async def order(ctx, arg):
     new_order = OrderedDict()
@@ -252,7 +268,7 @@ async def order(ctx, arg):
                 new_order[conflict] = hr.conflicts_active_order[conflict]
     hr.conflicts_active_order = new_order
 
-    await hr.report_print()
+    await hr.report_send()
     await purge_commands(CHANNEL_ADMIN)
 
 
@@ -267,7 +283,7 @@ async def seen(ctx):
         hr.conflicts_active_order[conflict]['updated_ago'] = hr.cache.conflicts_active[conflict]['updated_ago']
         hr.conflicts_active_order[conflict]['new'] = False
 
-    await hr.report_print()
+    await hr.report_send()
     await purge_commands(CHANNEL_ADMIN)
 
 
