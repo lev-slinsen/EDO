@@ -11,6 +11,9 @@ from eddb_api import Cache
 
 # TODO: aiohttp for requests
 # TODO: add logging
+# TODO: change event to allow for multiple extra objectives
+# TODO: check for number of symbols in report (max 2000)
+# TODO: add links to systems and stations on EDDB or Inara
 
 load_dotenv()   # All environment variables are stored in '.env' file
 TOKEN = os.getenv('DISCORD_TOKEN')
@@ -72,134 +75,125 @@ class HourlyReport:
     def __init__(self, bot):
         self.bot = bot
         self.conflicts_active_order = OrderedDict()
-        self.message_start = f'Conflicts report for {os.getenv("FACTION_NAME")}:\n\n'
+        self.message_start = f'Current objectives for {os.getenv("FACTION_NAME")}:\n\n'
         self.comment = ''
         self.event = ''
-        self.report = ''
         self.report_message_id = 0
 
-    def report_active(self, cache, number):
-        self.report = ''
-
-        if len(cache.conflicts_active) == 0:
-            self.report += f'Our Empire is at peace (for now).\n\n'
+    def report_active(self, conflicts_active, number):
+        if len(conflicts_active) == 0:
+            text = f'Our Empire is at peace (for now).\n\n'
         else:
-            for conflict in cache.conflicts_active:
+            for conflict in conflicts_active:
                 if conflict not in self.conflicts_active_order:
                     self.conflicts_active_order[conflict] = {
-                        'score_us': cache.conflicts_active[conflict]['score_us'],
-                        'score_them': cache.conflicts_active[conflict]['score_them'],
-                        'updated_ago': cache.conflicts_active[conflict]['updated_ago'],
+                        'score_us': conflicts_active[conflict]['score_us'],
+                        'score_them': conflicts_active[conflict]['score_them'],
+                        'updated_ago': conflicts_active[conflict]['updated_ago'],
                         'new': True
                     }
-
-            self.report += f'Active conflicts:\n\n'
+            text = f'Active conflicts:\n\n'
             for idx, conflict in enumerate(self.conflicts_active_order):
-                if conflict not in cache.conflicts_active:
+                if conflict not in conflicts_active:
                     self.conflicts_active_order.pop(conflict)
                 else:
-                    score_us = cache.conflicts_active[conflict]["score_us"]
-                    if cache.conflicts_active[conflict]['score_us'] != \
-                            self.conflicts_active_order[conflict]['score_us']:
-                        score_us = f'**{cache.conflicts_active[conflict]["score_us"]}**'
+                    score_us = conflicts_active[conflict]["score_us"]
+                    if conflicts_active[conflict]['score_us'] != self.conflicts_active_order[conflict]['score_us']:
+                        score_us = f'**{conflicts_active[conflict]["score_us"]}**'
 
-                    score_them = cache.conflicts_active[conflict]["score_them"]
-                    if cache.conflicts_active[conflict]['score_them'] != \
-                            self.conflicts_active_order[conflict]['score_them']:
-                        score_them = f'**{cache.conflicts_active[conflict]["score_them"]}**'
+                    score_them = conflicts_active[conflict]["score_them"]
+                    if conflicts_active[conflict]['score_them'] != self.conflicts_active_order[conflict]['score_them']:
+                        score_them = f'**{conflicts_active[conflict]["score_them"]}**'
 
                     system = conflict
                     if self.conflicts_active_order[conflict]['new']:
                         system = f'**{conflict}**:exclamation:'
 
                     num = number_emoji[idx+number]
+                    text += '{0} - {1} in {2}\n' \
+                            '{3} [ {4} - {5} ] {6}\n'.format(
+                             num,
+                             conflicts_active[conflict]["state"].capitalize(),
+                             system,
+                             os.getenv('FACTION_NAME'),
+                             score_us,
+                             score_them,
+                             conflicts_active[conflict]["opponent"],
+                             )
+                    if conflicts_active[conflict]['win']:
+                        text += f'On victory we gain: *{conflicts_active[conflict]["win"]}*\n'
+                    if conflicts_active[conflict]['loss']:
+                        text += f'On defeat we lose: *{conflicts_active[conflict]["loss"]}*\n'
 
-                    self.report += '{0} - {1} in {2}\n' \
-                                   '{3} [ {4} - {5} ] {6}\n'.format(
-                                    num,
-                                    cache.conflicts_active[conflict]["state"].capitalize(),
-                                    system,
-                                    os.getenv('FACTION_NAME'),
-                                    score_us,
-                                    score_them,
-                                    cache.conflicts_active[conflict]["opponent"],
-                                    )
+                    if len(conflicts_active[conflict]["updated_ago"]) > 12:
+                        text += f'Last updated: **{conflicts_active[conflict]["updated_ago"]}**\n\n'
+                    else:
+                        text += f'Last updated: {conflicts_active[conflict]["updated_ago"]}\n\n'
+            self.report += text
 
-                    if cache.conflicts_active[conflict]['win']:
-                        self.report += f'On victory we gain: {cache.conflicts_active[conflict]["win"]}\n'
-
-                    if cache.conflicts_active[conflict]['loss']:
-                        self.report += f'On defeat we lose: {cache.conflicts_active[conflict]["loss"]}\n'
-
-                    self.report += f'Last updated: {cache.conflicts_active[conflict]["updated_ago"]}\n\n'
-
-    def report_recovering(self, cache):
-        if len(cache.conflicts_recovering) == 0:
+    def report_pending(self, conflicts_pending):
+        text = ''
+        if len(conflicts_pending) == 0:
             pass
         else:
-            self.report += 'Recovering from conflicts:\n\n'
-            for idx, conflict in enumerate(cache.conflicts_recovering):
-                state = cache.conflicts_recovering[conflict]["state"]
-                status = cache.conflicts_recovering[conflict]["status"]
-                stake = cache.conflicts_recovering[conflict]["stake"]
-                self.report += '{0}: {1} in {2} - {3}. '.format(
-                                idx+1,
-                                state.capitalize(),
-                                conflict,
-                                status.capitalize(),
-                                )
+            for conflict in conflicts_pending:
+                state = conflicts_pending[conflict]["state"]
+                text += f':arrow_up: - *Pending* {state.capitalize()} in {conflict}.\n'
+
+                if conflicts_pending[conflict]['win']:
+                    text += f'On victory we gain: *{conflicts_pending[conflict]["win"]}*\n'
+                if conflicts_pending[conflict]['loss']:
+                    text += f'On defeat we lose: *{conflicts_pending[conflict]["loss"]}*\n'
+
+                if len(conflicts_pending[conflict]["updated_ago"]) > 12:
+                    text += f'Last updated: **{conflicts_pending[conflict]["updated_ago"]}**\n\n'
+                else:
+                    text += f'Last updated: {conflicts_pending[conflict]["updated_ago"]}\n\n'
+        self.report += text
+
+    def report_recovering(self, conflicts_recovering):
+        text = ''
+        if len(conflicts_recovering) == 0:
+            pass
+        else:
+            for conflict in conflicts_recovering:
+                state = conflicts_recovering[conflict]["state"]
+                status = conflicts_recovering[conflict]["status"]
+                stake = conflicts_recovering[conflict]["stake"]
+                text += f':arrow_down: - *Recovering from* {state.capitalize()} in {conflict} - {status.capitalize()}. '
                 if stake:
                     if status == 'victory':
-                        self.report += f'We won {stake}\n'
+                        text += f'We won {stake}\n\n'
                     if status == 'defeat':
-                        self.report += f'We lost {stake}\n'
+                        text += f'We lost {stake}\n\n'
                 else:
-                    self.report += '\n'
-                self.report += f'Last updated: {cache.conflicts_recovering[conflict]["updated_ago"]}\n\n'
+                    text += '\n\n'
+        self.report += text
 
-    def report_pending(self, cache):
-        if len(cache.conflicts_pending) == 0:
-            pass
-        else:
-            self.report += 'Pending conflicts:\n\n'
-            for idx, conflict in enumerate(cache.conflicts_pending):
-                state = cache.conflicts_pending[conflict]["state"]
-                self.report += '{0}: {1} in {2}.\n'.format(
-                                idx+1,
-                                state.capitalize(),
-                                conflict,
-                                )
-                if cache.conflicts_pending[conflict]['win']:
-                    self.report += f'On victory we gain: {cache.conflicts_pending[conflict]["win"]}\n'
-
-                if cache.conflicts_pending[conflict]['loss']:
-                    self.report += f'On defeat we lose: {cache.conflicts_pending[conflict]["loss"]}\n'
-
-                self.report += f'Last updated: {cache.conflicts_pending[conflict]["updated_ago"]}\n\n'
-
-    def unvisited_systems(self, data):
-        report = 'List of unvisited systems:\n'
-        for day in data:
+    def unvisited_systems(self, unvisited_systems):
+        text = 'Systems unchecked for:\n'
+        for day in unvisited_systems:
             if day == 7:
-                report += f':exclamation:**A week or more**: {data[day]}'
-            elif data[day]:
-                report += f'{day} days: {data[day]}\n'
+                text += f':exclamation:**A week or more**: {unvisited_systems[day]}'
+            elif unvisited_systems[day]:
+                text += f'{day} days: {unvisited_systems[day]}\n'
 
-        if report[-26:] == 'List of unchecked systems:':
-            report.replace('List of unchecked systems:', '')
+        if text.endswith('Systems unchecked for:'):
+            text.replace('Systems unchecked for:', '')
 
         to_replace = ('[', ']', "'")
         for symbol in to_replace:
-            report = report.replace(symbol, '')
-        self.report += report
+            text = text.replace(symbol, '')
+        self.report += text
 
     async def report_send(self):
+        self.report = ''
         number = 1
         if self.event:
             number = 2
-        self.report_active(self.cache, number)
-        self.report_recovering(self.cache)
-        self.report_pending(self.cache)
+        self.report_active(self.cache.conflicts_active, number)
+        self.report_pending(self.cache.conflicts_pending)
+        self.report_recovering(self.cache.conflicts_recovering)
         self.unvisited_systems(self.cache.unvisited_systems)
 
         await purge_own_messages(CHANNEL_ADMIN)
@@ -225,7 +219,8 @@ class HourlyReport:
 
 @bot.command(name='comment',
              brief='Adds comment to the report',
-             description='Adds text at the top of the report.')
+             description='Adds text at the top of the report. To remove comment, pass plain command. '
+                         'To add multiple lines, wrap text into "".')
 @commands.has_role(ADMIN_ROLE)
 async def comment(ctx, *args):
     hr.comment = (' '.join(args))
@@ -237,7 +232,8 @@ async def comment(ctx, *args):
 @bot.command(name='event',
              brief='Adds event to the report',
              description='Adds text after comment and before active conflicts to the report. '
-                         'Marks it as the first objective.')
+                         'Marks it as the first objective. To remove objective, pass plain command. '
+                         'To add multiple lines, wrap text into "".')
 @commands.has_role(ADMIN_ROLE)
 async def comment(ctx, *args):
     hr.event = (' '.join(args))

@@ -56,6 +56,7 @@ class Cache:
         return text
 
     def stake(self, station):
+        text = ''
         if (
                 station and
                 station not in self.stations
@@ -70,24 +71,24 @@ class Cache:
             else:
                 distance = round(station_json_data["docs"][0]["distance_from_star"], 1)
                 if station_json_data['docs'][0]['type'] in ('coriolis', 'coriolis starport'):
-                    self.stations[station] = f'Coriolis starport - L pad, {distance} Ls'
+                    self.stations[station] = f'Coriolis starport, L'
                 elif station_json_data['docs'][0]['type'] in ('bernal', 'ocellus starport'):
-                    self.stations[station] = f'Ocellus starport - L pad, {distance} Ls'
+                    self.stations[station] = f'Ocellus starport, L'
                 elif station_json_data['docs'][0]['type'] in ('orbis', 'orbis starport'):
-                    self.stations[station] = f'Orbis starport - L pad, {distance} Ls'
+                    self.stations[station] = f'Orbis starport, L'
                 elif station_json_data['docs'][0]['type'] in ('crateroutpost', 'surfacestation',
                                                               'planetary outpost', 'planetary port', 'craterport'):
-                    self.stations[station] = f'Surface station - L pad, {distance} Ls'
+                    self.stations[station] = f'Surface station, L'
                 elif station_json_data['docs'][0]['type'] == 'asteroidbase':
-                    self.stations[station] = f'Asteroid base - L pad, {distance} Ls'
+                    self.stations[station] = f'Asteroid base, L'
                 elif station_json_data['docs'][0]['type'] == 'megaship':
-                    self.stations[station] = f'Megaship - L pad, {distance} Ls'
+                    self.stations[station] = f'Megaship, L'
                 elif station_json_data['docs'][0]['type'][-7:] == 'outpost':
-                    self.stations[station] = f'Orbis starport - M pad, {distance} Ls'
+                    self.stations[station] = f'Orbis starport, M'
+                else:
+                    self.stations[station] = f'**Unknown type**'
 
             text = f'{station} ({self.stations[station]})'
-        elif station == '':
-            text = ''
         return text
 
     def get_conflicts_active(self, faction_data):
@@ -191,13 +192,17 @@ class Cache:
         frontier_time = datetime.now(frontier_tz)
         report = {2: [], 3: [], 4: [], 5: [], 6: [], 7: []}
         for system in faction_data['docs'][0]['faction_presence']:
-            updated_ago = (frontier_time -
-                           frontier_tz.localize(datetime.strptime(system['updated_at'][0:16], '%Y-%m-%dT%H:%M')))
-            for day in report:
-                if timedelta(days=day+1) > updated_ago > timedelta(days=day):
-                    report[day].append(system['system_name'])
-            if updated_ago > timedelta(days=7):
-                report[7].append(system['system_name'])
+            if (
+                    system['system_name'] not in self.conflicts_active and
+                    system['system_name'] not in self.conflicts_pending
+            ):
+                updated_ago = (frontier_time -
+                               frontier_tz.localize(datetime.strptime(system['updated_at'][0:16], '%Y-%m-%dT%H:%M')))
+                for day in report:
+                    if timedelta(days=day+1) > updated_ago > timedelta(days=day):
+                        report[day].append(system['system_name'])
+                if updated_ago > timedelta(days=7):
+                    report[7].append(system['system_name'])
         if DEBUG:
             print('Cached unvisited_systems:', report, '\n')
         return report
