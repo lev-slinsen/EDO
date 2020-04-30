@@ -9,11 +9,13 @@ from dotenv import load_dotenv
 
 from eddb_api import Cache
 
-# TODO: aiohttp for requests
-# TODO: add logging
+# TODO: refactor last updated to make text on bot side
 # TODO: change event to allow for multiple extra objectives
 # TODO: check for number of symbols in report (max 2000)
 # TODO: add links to systems and stations on EDDB or Inara
+# TODO: add command for checking the best LTD selling station
+# TODO: aiohttp for requests
+# TODO: add logging
 
 load_dotenv()   # All environment variables are stored in '.env' file
 TOKEN = os.getenv('DISCORD_TOKEN')
@@ -49,13 +51,13 @@ async def bot_start():
 
 
 async def purge_own_messages(channel_to):
-    for message in await bot.get_channel(channel_to).history(limit=200).flatten():
+    for message in await bot.get_channel(channel_to).history(limit=100).flatten():
         if message.author == bot.user:
             await message.delete()
 
 
 async def purge_commands(channel_to):
-    for message in await bot.get_channel(channel_to).history(limit=200).flatten():
+    for message in await bot.get_channel(channel_to).history(limit=100).flatten():
         if message.content.startswith('!'):
             await message.delete()
 
@@ -75,12 +77,13 @@ class HourlyReport:
     def __init__(self, bot):
         self.bot = bot
         self.conflicts_active_order = OrderedDict()
-        self.message_start = f'Current objectives for {os.getenv("FACTION_NAME")}:\n\n'
+        self.message_start = f'Current objectives for {os.getenv("FACTION_NAME")}:\n'
         self.comment = ''
         self.event = ''
         self.report_message_id = 0
 
     def report_active(self, conflicts_active, number):
+        text = ''
         if len(conflicts_active) == 0:
             text = f'Our Empire is at peace (for now).\n\n'
         else:
@@ -92,7 +95,6 @@ class HourlyReport:
                         'updated_ago': conflicts_active[conflict]['updated_ago'],
                         'new': True
                     }
-            text = f'Active conflicts:\n\n'
             for idx, conflict in enumerate(self.conflicts_active_order):
                 if conflict not in conflicts_active:
                     self.conflicts_active_order.pop(conflict)
@@ -173,11 +175,12 @@ class HourlyReport:
     def unvisited_systems(self, unvisited_systems):
         text = 'Systems unchecked for:\n'
         for day in unvisited_systems:
-            if day == 7:
+            if unvisited_systems[day] and day == 7:
                 text += f':exclamation:**A week or more**: {unvisited_systems[day]}'
+            elif unvisited_systems[day] and (day == 5 or day == 6):
+                text += f'**{day} days**: {unvisited_systems[day]}\n'
             elif unvisited_systems[day]:
                 text += f'{day} days: {unvisited_systems[day]}\n'
-
         if text.endswith('Systems unchecked for:'):
             text.replace('Systems unchecked for:', '')
 
@@ -200,14 +203,17 @@ class HourlyReport:
 
         report = self.message_start
         if self.comment:
-            report += f'{self.comment}\n\n'
+            report += f'\n{self.comment}\n'
         if self.event:
-            report += f':one: - {self.event}\n\n'
+            report += f'\n:one: - {self.event}\n\n'
+        else:
+            report += f'\n'
         report += self.report
         await bot.get_channel(CHANNEL_ADMIN).send(report)
 
     @tasks.loop(minutes=30)
     async def report_loop(self):
+        await bot.get_channel(CHANNEL_ADMIN).send(f'`Updating report...`')
         self.cache = Cache()
         await self.report_send()
 
@@ -288,7 +294,7 @@ async def seen(ctx):
              description='Changes the followed faction')
 @commands.has_role(ADMIN_ROLE)
 async def faction(ctx, *args):
-    await bot.get_channel(CHANNEL_ADMIN).send(f'Working...')
+    await bot.get_channel(CHANNEL_ADMIN).send(f'`Changing faction...`')
     os.environ['FACTION_NAME'] = (' '.join(args))
     hr.report_loop.cancel()     # object NoneType can't be used in 'await' expression
     await asyncio.sleep(3)      # TODO: fix this with a proper await
