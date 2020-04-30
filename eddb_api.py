@@ -13,11 +13,11 @@ DEBUG = os.getenv('DEBUG')
 
 req_uri = 'https://elitebgs.app/api/ebgs/v4/'
 frontier_tz = pytz.timezone('UTC')
+frontier_time = datetime.now(frontier_tz)
 
 
 class Cache:
     def faction_update(self):
-        frontier_time = datetime.now(frontier_tz)
         self.FACTION_NAME = os.getenv('FACTION_NAME').lower()
         req_faction = self.FACTION_NAME.replace(' ', '%20')
         faction_json = requests.get(f"{req_uri}factions?name={req_faction}")
@@ -40,22 +40,7 @@ class Cache:
 
         return faction_json_data
 
-    def updated_ago(self, api_updated_at):
-        frontier_time = datetime.now(frontier_tz)
-        updated_at = frontier_tz.localize(datetime.strptime(api_updated_at[0:16], '%Y-%m-%dT%H:%M'))
-        updated_ago = str(frontier_time - updated_at)[:-13]
-        if (
-                updated_ago[-2:] == '1' or
-                updated_ago[-2:] == '21'
-        ):
-            text = f'{updated_ago} hour ago.'
-        elif updated_ago[-2:] == '0':
-            text = 'less than an hour ago.'
-        else:
-            text = f'{updated_ago} hours ago.'
-        return text
-
-    def stake(self, station):
+    def stake_text(self, station):
         text = ''
         if (
                 station and
@@ -69,7 +54,6 @@ class Cache:
             if station_json_data['total'] == 0:
                 self.stations[station] = 'Installation'
             else:
-                distance = round(station_json_data["docs"][0]["distance_from_star"], 1)
                 if station_json_data['docs'][0]['type'] in ('coriolis', 'coriolis starport'):
                     self.stations[station] = f'Coriolis starport, L'
                 elif station_json_data['docs'][0]['type'] in ('bernal', 'ocellus starport'):
@@ -122,9 +106,9 @@ class Cache:
                                 'opponent': conflict[them]['name'],
                                 'score_us': conflict[us]['days_won'],
                                 'score_them': conflict[them]['days_won'],
-                                'win': self.stake(conflict[them]['stake']),
-                                'loss': self.stake(conflict[us]['stake']),
-                                'updated_ago': self.updated_ago(system['updated_at'])
+                                'win': self.stake_text(conflict[them]['stake']),
+                                'loss': self.stake_text(conflict[us]['stake']),
+                                'updated_at': system['updated_at']
                             }
         if DEBUG:
             print('Cached conflicts_active:', report)
@@ -159,8 +143,8 @@ class Cache:
                                     'status': status,
                                     'days_won': days_won,
                                     'days_lost': opp_days_won,
-                                    'stake': stake,
-                                    'updated_ago': self.updated_ago(system['updated_at'])
+                                    'stake': self.stake_text(stake),
+                                    'updated_at': system['updated_at']
                                 }
         if DEBUG:
             print('Cached conflicts_recovering:', report)
@@ -180,16 +164,15 @@ class Cache:
                             if opp_system['conflicts'][0]['opponent_name_lower'] == self.FACTION_NAME:
                                 report[system['system_name']] = {
                                     'state': system['conflicts'][0]['type'],
-                                    'win': self.stake(opp_system['conflicts'][0]['stake']),
-                                    'loss': self.stake(system['conflicts'][0]['stake']),
-                                    'updated_ago': self.updated_ago(system['updated_at'])
+                                    'win': self.stake_text(opp_system['conflicts'][0]['stake']),
+                                    'loss': self.stake_text(system['conflicts'][0]['stake']),
+                                    'updated_at': system['updated_at']
                                 }
         if DEBUG:
             print('Cached conflicts_pending:', report)
         return report
 
     def get_unvisited_systems(self, faction_data):
-        frontier_time = datetime.now(frontier_tz)
         report = {2: [], 3: [], 4: [], 5: [], 6: [], 7: []}
         for system in faction_data['docs'][0]['faction_presence']:
             if (

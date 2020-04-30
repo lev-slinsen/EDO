@@ -1,7 +1,10 @@
 import asyncio
 import os
 from collections import OrderedDict
+from datetime import datetime
+from datetime import timedelta
 
+import pytz
 import discord
 from discord.ext import commands
 from discord.ext import tasks
@@ -9,7 +12,6 @@ from dotenv import load_dotenv
 
 from eddb_api import Cache
 
-# TODO: refactor last updated to make text on bot side
 # TODO: change event to allow for multiple extra objectives
 # TODO: check for number of symbols in report (max 2000)
 # TODO: add links to systems and stations on EDDB or Inara
@@ -28,6 +30,8 @@ client = discord.Client()
 
 number_emoji = (':zero:', ':one:', ':two:', ':three:', ':four:', ':five:',
                 ':six:', ':seven:', ':eight:', ':nine:', ':ten:')
+frontier_tz = pytz.timezone('UTC')
+frontier_time = datetime.now(frontier_tz)
 
 
 '''What I do on startup'''
@@ -77,22 +81,35 @@ class HourlyReport:
     def __init__(self, bot):
         self.bot = bot
         self.conflicts_active_order = OrderedDict()
-        self.message_start = f'Current objectives for {os.getenv("FACTION_NAME")}:\n'
+        self.message_start = f'Current objectives for {os.getenv("FACTION_NAME")}:\n\n'
         self.comment = ''
         self.event = ''
         self.report_message_id = 0
 
+    def updated_ago_text(self, updated_at):
+        updated_at = frontier_tz.localize(datetime.strptime(updated_at[0:16], '%Y-%m-%dT%H:%M'))
+        updated_ago = str(frontier_time - updated_at)[:-13]
+        if (
+                updated_ago[-2:] == '1' or
+                updated_ago[-2:] == '21'
+        ):
+            text = f'{updated_ago} hour ago.'
+        elif updated_ago[-2:] == '0':
+            text = 'less than an hour ago.'
+        else:
+            text = f'{updated_ago} hours ago.'
+        return text
+
     def report_active(self, conflicts_active, number):
         text = ''
         if len(conflicts_active) == 0:
-            text = f'Our Empire is at peace (for now).\n\n'
+            text = 'Our Empire is at peace (for now).\n\n'
         else:
             for conflict in conflicts_active:
                 if conflict not in self.conflicts_active_order:
                     self.conflicts_active_order[conflict] = {
                         'score_us': conflicts_active[conflict]['score_us'],
                         'score_them': conflicts_active[conflict]['score_them'],
-                        'updated_ago': conflicts_active[conflict]['updated_ago'],
                         'new': True
                     }
             for idx, conflict in enumerate(self.conflicts_active_order):
@@ -127,11 +144,13 @@ class HourlyReport:
                     if conflicts_active[conflict]['loss']:
                         text += f'On defeat we lose: *{conflicts_active[conflict]["loss"]}*\n'
 
-                    if len(conflicts_active[conflict]["updated_ago"]) > 12:
-                        text += f'Last updated: **{conflicts_active[conflict]["updated_ago"]}**\n\n'
+                    updated_at = conflicts_active[conflict]["updated_at"]
+                    updated_at_time = frontier_tz.localize(datetime.strptime(updated_at[0:16], '%Y-%m-%dT%H:%M'))
+                    if (frontier_time - updated_at_time) >= timedelta(hours=12):
+                        text += f'Last updated: **{self.updated_ago_text(updated_at)}**\n\n'
                     else:
-                        text += f'Last updated: {conflicts_active[conflict]["updated_ago"]}\n\n'
-            self.report += text
+                        text += f'Last updated: {self.updated_ago_text(updated_at)}\n\n'
+        self.report += text
 
     def report_pending(self, conflicts_pending):
         text = ''
@@ -147,10 +166,12 @@ class HourlyReport:
                 if conflicts_pending[conflict]['loss']:
                     text += f'On defeat we lose: *{conflicts_pending[conflict]["loss"]}*\n'
 
-                if len(conflicts_pending[conflict]["updated_ago"]) > 12:
-                    text += f'Last updated: **{conflicts_pending[conflict]["updated_ago"]}**\n\n'
+                updated_at = conflicts_pending[conflict]["updated_at"]
+                updated_at_time = frontier_tz.localize(datetime.strptime(updated_at[0:16], '%Y-%m-%dT%H:%M'))
+                if (frontier_time - updated_at_time) >= timedelta(hours=12):
+                    text += f'Last updated: **{self.updated_ago_text(updated_at)}**\n\n'
                 else:
-                    text += f'Last updated: {conflicts_pending[conflict]["updated_ago"]}\n\n'
+                    text += f'Last updated: {self.updated_ago_text(updated_at)}\n\n'
         self.report += text
 
     def report_recovering(self, conflicts_recovering):
@@ -162,27 +183,28 @@ class HourlyReport:
                 state = conflicts_recovering[conflict]["state"]
                 status = conflicts_recovering[conflict]["status"]
                 stake = conflicts_recovering[conflict]["stake"]
-                text += f':arrow_down: - *Recovering from* {state.capitalize()} in {conflict} - {status.capitalize()}. '
+                text += f':arrow_down: - *Recovering* from {state.capitalize()} in {conflict} - {status.capitalize()}'
                 if stake:
                     if status == 'victory':
-                        text += f'We won {stake}\n\n'
+                        text += f', we won *{stake}*\n\n'
                     if status == 'defeat':
-                        text += f'We lost {stake}\n\n'
+                        text += f', we lost *{stake}*\n\n'
                 else:
-                    text += '\n\n'
+                    text += '!\n\n'
         self.report += text
 
-    def unvisited_systems(self, unvisited_systems):
+    def unvisited_systems_text(self, unvisited_systems):
         text = 'Systems unchecked for:\n'
         for day in unvisited_systems:
-            if unvisited_systems[day] and day == 7:
+            if day == 7 and unvisited_systems[day]:
                 text += f':exclamation:**A week or more**: {unvisited_systems[day]}'
-            elif unvisited_systems[day] and (day == 5 or day == 6):
+            elif 5 <= day <= 6 and unvisited_systems[day]:
                 text += f'**{day} days**: {unvisited_systems[day]}\n'
             elif unvisited_systems[day]:
                 text += f'{day} days: {unvisited_systems[day]}\n'
-        if text.endswith('Systems unchecked for:'):
-            text.replace('Systems unchecked for:', '')
+        if len(text) <= 23:
+            text = ''
+            return
 
         to_replace = ('[', ']', "'")
         for symbol in to_replace:
@@ -197,17 +219,15 @@ class HourlyReport:
         self.report_active(self.cache.conflicts_active, number)
         self.report_pending(self.cache.conflicts_pending)
         self.report_recovering(self.cache.conflicts_recovering)
-        self.unvisited_systems(self.cache.unvisited_systems)
+        self.unvisited_systems_text(self.cache.unvisited_systems)
 
         await purge_own_messages(CHANNEL_ADMIN)
 
         report = self.message_start
         if self.comment:
-            report += f'\n{self.comment}\n'
+            report += f'{self.comment}\n\n'
         if self.event:
-            report += f'\n:one: - {self.event}\n\n'
-        else:
-            report += f'\n'
+            report += f':one: - {self.event}\n\n'
         report += self.report
         await bot.get_channel(CHANNEL_ADMIN).send(report)
 
@@ -282,7 +302,6 @@ async def seen(ctx):
     for conflict in hr.conflicts_active_order:
         hr.conflicts_active_order[conflict]['score_us'] = hr.cache.conflicts_active[conflict]['score_us']
         hr.conflicts_active_order[conflict]['score_them'] = hr.cache.conflicts_active[conflict]['score_them']
-        hr.conflicts_active_order[conflict]['updated_ago'] = hr.cache.conflicts_active[conflict]['updated_ago']
         hr.conflicts_active_order[conflict]['new'] = False
 
     await hr.report_send()
