@@ -1,5 +1,6 @@
 import asyncio
 import os
+import string
 from collections import OrderedDict
 from datetime import datetime
 from datetime import timedelta
@@ -195,14 +196,15 @@ class HourlyReport:
 
     def unvisited_systems_text(self, unvisited_systems):
         text = 'Systems unchecked for:\n'
+        init = text
         for day in unvisited_systems:
             if day == 7 and unvisited_systems[day]:
-                text += f':exclamation:**A week or more**: {unvisited_systems[day]}'
+                text += f':exclamation:**Over a week**: {unvisited_systems[day]}'
             elif 5 <= day <= 6 and unvisited_systems[day]:
                 text += f'**{day} days**: {unvisited_systems[day]}\n'
             elif unvisited_systems[day]:
                 text += f'{day} days: {unvisited_systems[day]}\n'
-        if len(text) <= 23:
+        if text == init:
             text = ''
             return
 
@@ -314,7 +316,7 @@ async def seen(ctx):
 @commands.has_role(ADMIN_ROLE)
 async def faction(ctx, *args):
     await bot.get_channel(CHANNEL_ADMIN).send(f'`Changing faction...`')
-    os.environ['FACTION_NAME'] = (' '.join(args))
+    os.environ['FACTION_NAME'] = string.capwords(' '.join(args))
     hr.report_loop.cancel()     # object NoneType can't be used in 'await' expression
     await asyncio.sleep(3)      # TODO: fix this with a proper await
     await bot_start()
