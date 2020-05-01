@@ -20,7 +20,7 @@ from eddb_api import Cache
 # TODO: aiohttp for requests
 # TODO: add logging
 
-load_dotenv()   # All environment variables are stored in '.env' file
+load_dotenv()  # All environment variables are stored in '.env' file
 TOKEN = os.getenv('DISCORD_TOKEN')
 DEBUG = os.getenv('DEBUG')
 CHANNEL_ADMIN = int(os.getenv('CHANNEL_ADMIN'))
@@ -33,7 +33,6 @@ number_emoji = (':zero:', ':one:', ':two:', ':three:', ':four:', ':five:',
                 ':six:', ':seven:', ':eight:', ':nine:', ':ten:')
 frontier_tz = pytz.timezone('UTC')
 frontier_time = datetime.now(frontier_tz)
-
 
 '''What I do on startup'''
 
@@ -129,13 +128,13 @@ class HourlyReport:
                     if self.conflicts_active_order[conflict]['new']:
                         system = f'**{conflict}**:exclamation:'
 
-                    num = number_emoji[idx+number]
+                    num = number_emoji[idx + number]
                     text += '{0} - {1} in {2}\n' \
                             '{3} [ {4} - {5} ] {6}\n'.format(
                              num,
                              conflicts_active[conflict]["state"].capitalize(),
                              system,
-                             os.getenv('FACTION_NAME'),
+                             os.getenv("FACTION_NAME"),
                              score_us,
                              score_them,
                              conflicts_active[conflict]["opponent"],
@@ -144,6 +143,8 @@ class HourlyReport:
                         text += f'On victory we gain: *{conflicts_active[conflict]["win"]}*\n'
                     if conflicts_active[conflict]['loss']:
                         text += f'On defeat we lose: *{conflicts_active[conflict]["loss"]}*\n'
+                    if not conflicts_active[conflict]['win'] and not conflicts_active[conflict]['loss']:
+                        text += '*No stakes*\n'
 
                     updated_at = conflicts_active[conflict]["updated_at"]
                     updated_at_time = frontier_tz.localize(datetime.strptime(updated_at[0:16], '%Y-%m-%dT%H:%M'))
@@ -166,6 +167,8 @@ class HourlyReport:
                     text += f'On victory we gain: *{conflicts_pending[conflict]["win"]}*\n'
                 if conflicts_pending[conflict]['loss']:
                     text += f'On defeat we lose: *{conflicts_pending[conflict]["loss"]}*\n'
+                if not conflicts_pending[conflict]['win'] and not conflicts_pending[conflict]['loss']:
+                    text += '*No stakes*\n'
 
                 updated_at = conflicts_pending[conflict]["updated_at"]
                 updated_at_time = frontier_tz.localize(datetime.strptime(updated_at[0:16], '%Y-%m-%dT%H:%M'))
@@ -196,21 +199,22 @@ class HourlyReport:
 
     def unvisited_systems_text(self, unvisited_systems):
         text = 'Systems unchecked for:\n'
-        init = text
+        lines = 1
         for day in unvisited_systems:
-            if day == 7 and unvisited_systems[day]:
-                text += f':exclamation:**Over a week**: {unvisited_systems[day]}'
-            elif 5 <= day <= 6 and unvisited_systems[day]:
-                text += f'**{day} days**: {unvisited_systems[day]}\n'
-            elif unvisited_systems[day]:
-                text += f'{day} days: {unvisited_systems[day]}\n'
-        if text == init:
-            text = ''
+            if unvisited_systems[day]:
+                lines += 1
+                if 5 <= day <= 6:
+                    text += f'**{day} days**: '
+                elif day == 7:
+                    text += f':exclamation:**Over a week**: '
+                else:
+                    text += f'{day} days: '
+                text += ', '.join(unvisited_systems[day])
+                text += '\n'
+        if lines == 1:
             return
-
-        to_replace = ('[', ']', "'")
-        for symbol in to_replace:
-            text = text.replace(symbol, '')
+        elif lines == 2:
+            text = text.replace(':\n', ' ')
         self.report += text
 
     async def report_send(self):
@@ -281,14 +285,14 @@ async def order(ctx, arg):
                                                   f'Please try again.')
         return
 
-    for num in range(1, len(hr.conflicts_active_order)+1):
+    for num in range(1, len(hr.conflicts_active_order) + 1):
         if str(num) not in arg:
             await bot.get_channel(CHANNEL_ADMIN).send(f'Typo?')
             return
 
     for num in arg:
         for idx, conflict in enumerate(hr.conflicts_active_order):
-            if idx+1 == int(num):
+            if idx + 1 == int(num):
                 new_order[conflict] = hr.conflicts_active_order[conflict]
     hr.conflicts_active_order = new_order
 
