@@ -26,9 +26,10 @@ class Cache:
             with open('EDO/err.log', 'a+') as err_log:
                 if DEBUG:
                     print(f'Bad faction status code: {faction_json.status_code}')
-                err_log.write(f'{datetime.datetime.now()}, Bad faction status code: {faction_json.status_code}')
+                err_log.write(f'{datetime.datetime.now()}, Bad faction status code: {faction_json.status_code}\n')
 
         faction_json_data = json.loads(faction_json.text)
+        faction_json_data['error'] = 0
 
         if DEBUG:
             print(f'Cached faction: {faction_json_data}')
@@ -36,7 +37,8 @@ class Cache:
         if not faction_json_data['docs']:
             with open('err.log', 'a+') as err_log:
                 print(f'{frontier_time}, Bad faction name: {req_faction}')
-                err_log.write(f'{frontier_time}, Bad faction name: {req_faction}')
+                err_log.write(f'{frontier_time}, Bad faction name: {req_faction}\n')
+            faction_json_data['error'] = 1
 
         return faction_json_data
 
@@ -77,6 +79,8 @@ class Cache:
 
     def get_conflicts_active(self, faction_data):
         report = {}
+        if not faction_data['docs']:
+            return
         for system in faction_data['docs'][0]['faction_presence']:
             if system['conflicts']:
                 if system['conflicts'][0]['status'] == 'active':
@@ -182,9 +186,9 @@ class Cache:
                 updated_ago = (frontier_time -
                                frontier_tz.localize(datetime.strptime(system['updated_at'][0:16], '%Y-%m-%dT%H:%M')))
                 for day in report:
-                    if timedelta(days=day+1) > updated_ago > timedelta(days=day):
+                    if timedelta(days=day+1) > updated_ago > timedelta(days=day) and updated_ago < timedelta(days=7):
                         report[day].append(system['system_name'])
-                if updated_ago > timedelta(days=7):
+                if updated_ago >= timedelta(days=7):
                     report[7].append(system['system_name'])
         if DEBUG:
             print('Cached unvisited_systems:', report, '\n')
@@ -193,6 +197,8 @@ class Cache:
     def __init__(self):
         self.stations = {}
         self.faction_data = self.faction_update()
+        if self.faction_data['error'] != 0:
+            return
         self.conflicts_active = self.get_conflicts_active(self.faction_data)
         self.conflicts_recovering = self.get_conflicts_recovering(self.faction_data)
         self.conflicts_pending = self.get_conflicts_pending(self.faction_data)

@@ -14,10 +14,11 @@ from dotenv import load_dotenv
 from eddb_api import Cache
 
 # TODO: check for number of symbols in report (max 2000)
-# TODO: add links to systems and stations on EDDB or Inara
 # TODO: add command for checking the best LTD selling station
 # TODO: aiohttp for requests
 # TODO: add logging
+# TODO: add reaction mechanics
+# TODO: add links to systems and stations on EDDB or Inara
 
 load_dotenv()  # All environment variables are stored in '.env' file
 TOKEN = os.getenv('DISCORD_TOKEN')
@@ -30,6 +31,7 @@ client = discord.Client()
 
 number_emoji = (':zero:', ':one:', ':two:', ':three:', ':four:', ':five:',
                 ':six:', ':seven:', ':eight:', ':nine:', ':ten:')
+errors_text = {1: '`Error` No such faction. Please check faction name and try again.'}
 frontier_tz = pytz.timezone('UTC')
 frontier_time = datetime.now(frontier_tz)
 
@@ -84,7 +86,7 @@ class HourlyReport:
         self.conflicts_active_order = OrderedDict()
         self.message_start = f'Current objectives for {os.getenv("FACTION_NAME")}:\n\n'
         self.comment = ''
-        self.event = {1: ''}
+        self.event = {}
         self.report_message_id = 0
 
     def updated_ago_text(self, updated_at):
@@ -101,7 +103,7 @@ class HourlyReport:
             text = f'{updated_ago} hours ago.'
         return text
 
-    def report_active(self, conflicts_active, number):
+    def report_active(self, conflicts_active, start_num):
         text = ''
         if len(conflicts_active) == 0:
             text = 'No ongoing conflicts :sleeping:\n\n'
@@ -129,7 +131,7 @@ class HourlyReport:
                     if self.conflicts_active_order[conflict]['new']:
                         system = f'**{conflict}**:exclamation:'
 
-                    num = number_emoji[idx + number]
+                    num = number_emoji[idx + start_num]
                     text += '{0} - {1} in {2}\n' \
                             '{3} [ {4} - {5} ] {6}\n'.format(
                              num,
@@ -162,7 +164,7 @@ class HourlyReport:
         else:
             for conflict in conflicts_pending:
                 state = conflicts_pending[conflict]["state"]
-                text += f':arrow_up: - *Pending* {state.capitalize()} in {conflict}.\n'
+                text += f':arrow_up: - *Pending* {state.capitalize()} in {conflict}\n'
 
                 if conflicts_pending[conflict]['win']:
                     text += f'On victory we gain: *{conflicts_pending[conflict]["win"]}*\n'
@@ -220,12 +222,8 @@ class HourlyReport:
 
     async def report_send(self):
         self.report = ''
-        number = 1
-        if self.event[1]:
-            for ev in self.event:
-                if self.event[ev]:
-                    number += 1
-        self.report_active(self.cache.conflicts_active, number)
+        start_num = len(self.event)
+        self.report_active(self.cache.conflicts_active, start_num)
         self.report_pending(self.cache.conflicts_pending)
         self.report_recovering(self.cache.conflicts_recovering)
         self.unvisited_systems_text(self.cache.unvisited_systems)
@@ -235,10 +233,8 @@ class HourlyReport:
         report = self.message_start
         if self.comment:
             report += f'{self.comment}\n\n'
-        for ev in self.event:
-            if not self.event[ev]:
-                break
-            else:
+        if self.event:
+            for ev in self.event:
                 report += f'{number_emoji[ev]} - {self.event[ev]}\n\n'
         report += self.report
         await bot.get_channel(CHANNEL_ADMIN).send(report)
@@ -247,6 +243,9 @@ class HourlyReport:
     async def report_loop(self):
         await bot.get_channel(CHANNEL_ADMIN).send(f'`Updating report...`')
         self.cache = Cache()
+        if self.cache.faction_data['error'] != 0:
+            await bot.get_channel(CHANNEL_ADMIN).send(errors_text[self.cache.faction_data['error']])
+            return
         await self.report_send()
 
         await purge_commands(CHANNEL_ADMIN)
@@ -268,18 +267,21 @@ async def comment(ctx, *args):
 
 
 @bot.command(name='event',
-             brief='Adds event to the report',  # TODO: updated command description
+             brief='Adds event to the report',  # TODO: update command description
              description='Adds text after comment and before active conflicts to the report. '
                          'Marks it as the first objective. To remove objective, pass plain command. '
                          'To add multiple lines, wrap text into "".')
 @commands.has_role(ADMIN_ROLE)
 async def event(ctx, arg_num=None, *args):
     if not arg_num:
-        hr.event[1] = ''
+        hr.event = {}
     elif not arg_num.isnumeric():
         hr.event[1] = f'{arg_num} '
         hr.event[1] += (' '.join(args))
     else:
+        for num in range(1, int(arg_num)):
+            if num not in hr.event:
+                hr.event[num] = ''
         hr.event[int(arg_num)] = (' '.join(args))
 
     await hr.report_send()
