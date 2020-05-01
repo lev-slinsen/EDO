@@ -13,7 +13,6 @@ from dotenv import load_dotenv
 
 from eddb_api import Cache
 
-# TODO: change event to allow for multiple extra objectives
 # TODO: check for number of symbols in report (max 2000)
 # TODO: add links to systems and stations on EDDB or Inara
 # TODO: add command for checking the best LTD selling station
@@ -34,6 +33,7 @@ number_emoji = (':zero:', ':one:', ':two:', ':three:', ':four:', ':five:',
 frontier_tz = pytz.timezone('UTC')
 frontier_time = datetime.now(frontier_tz)
 
+
 '''What I do on startup'''
 
 
@@ -41,7 +41,8 @@ frontier_time = datetime.now(frontier_tz)
 async def on_ready():
     print(f'{bot.user.name} is connected to the following guilds:')
     for guild in bot.guilds:
-        print(f'"{guild.name}" with id: {guild.id}\n')
+        print(f'"{guild.name}" with id: {guild.id}')
+    print('\n')
     await bot_start()
 
 
@@ -83,7 +84,7 @@ class HourlyReport:
         self.conflicts_active_order = OrderedDict()
         self.message_start = f'Current objectives for {os.getenv("FACTION_NAME")}:\n\n'
         self.comment = ''
-        self.event = ''
+        self.event = {1: ''}
         self.report_message_id = 0
 
     def updated_ago_text(self, updated_at):
@@ -103,7 +104,7 @@ class HourlyReport:
     def report_active(self, conflicts_active, number):
         text = ''
         if len(conflicts_active) == 0:
-            text = 'Our Empire is at peace (for now).\n\n'
+            text = 'No ongoing conflicts :sleeping:\n\n'
         else:
             for conflict in conflicts_active:
                 if conflict not in self.conflicts_active_order:
@@ -220,8 +221,10 @@ class HourlyReport:
     async def report_send(self):
         self.report = ''
         number = 1
-        if self.event:
-            number = 2
+        if self.event[1]:
+            for ev in self.event:
+                if self.event[ev]:
+                    number += 1
         self.report_active(self.cache.conflicts_active, number)
         self.report_pending(self.cache.conflicts_pending)
         self.report_recovering(self.cache.conflicts_recovering)
@@ -232,8 +235,11 @@ class HourlyReport:
         report = self.message_start
         if self.comment:
             report += f'{self.comment}\n\n'
-        if self.event:
-            report += f':one: - {self.event}\n\n'
+        for ev in self.event:
+            if not self.event[ev]:
+                break
+            else:
+                report += f'{number_emoji[ev]} - {self.event[ev]}\n\n'
         report += self.report
         await bot.get_channel(CHANNEL_ADMIN).send(report)
 
@@ -262,13 +268,19 @@ async def comment(ctx, *args):
 
 
 @bot.command(name='event',
-             brief='Adds event to the report',
+             brief='Adds event to the report',  # TODO: updated command description
              description='Adds text after comment and before active conflicts to the report. '
                          'Marks it as the first objective. To remove objective, pass plain command. '
                          'To add multiple lines, wrap text into "".')
 @commands.has_role(ADMIN_ROLE)
-async def comment(ctx, *args):
-    hr.event = (' '.join(args))
+async def event(ctx, arg_num=None, *args):
+    if not arg_num:
+        hr.event[1] = ''
+    elif not arg_num.isnumeric():
+        hr.event[1] = f'{arg_num} '
+        hr.event[1] += (' '.join(args))
+    else:
+        hr.event[int(arg_num)] = (' '.join(args))
 
     await hr.report_send()
     await purge_commands(CHANNEL_ADMIN)
@@ -324,8 +336,6 @@ async def faction(ctx, *args):
     hr.report_loop.cancel()     # object NoneType can't be used in 'await' expression
     await asyncio.sleep(3)      # TODO: fix this with a proper await
     await bot_start()
-
-    await purge_commands(CHANNEL_ADMIN)
 
 
 bot.run(TOKEN)
