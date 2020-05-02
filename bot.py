@@ -30,7 +30,7 @@ bot = commands.Bot(command_prefix='!')
 client = discord.Client()
 
 number_emoji = (':zero:', ':one:', ':two:', ':three:', ':four:', ':five:',
-                ':six:', ':seven:', ':eight:', ':nine:', ':ten:')
+                ':six:', ':seven:', ':eight:', ':nine:', ':keycap_ten:')
 errors_text = {1: '`Error` No such faction. Please check faction name and try again.'}
 frontier_tz = pytz.timezone('UTC')
 frontier_time = datetime.now(frontier_tz)
@@ -222,7 +222,7 @@ class HourlyReport:
 
     async def report_send(self):
         self.report = ''
-        start_num = len(self.event)
+        start_num = len(self.event) + 1
         self.report_active(self.cache.conflicts_active, start_num)
         self.report_pending(self.cache.conflicts_pending)
         self.report_recovering(self.cache.conflicts_recovering)
@@ -283,6 +283,11 @@ async def event(ctx, arg_num=None, *args):
             if num not in hr.event:
                 hr.event[num] = ''
         hr.event[int(arg_num)] = (' '.join(args))
+
+        for num in range(len(hr.event), 0):
+            print(num, int(arg_num))
+            if not hr.event[int(arg_num)]:
+                hr.event.pop(num)
 
     await hr.report_send()
     await purge_commands(CHANNEL_ADMIN)

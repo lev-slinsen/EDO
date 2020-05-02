@@ -118,6 +118,28 @@ class Cache:
             print('Cached conflicts_active:', report)
         return report
 
+    def get_conflicts_pending(self, faction_data):
+        report = {}
+        for system in faction_data['docs'][0]['faction_presence']:
+            if system['conflicts']:
+                if system['conflicts'][0]['status'] == 'pending':
+                    opponent_name = system['conflicts'][0]['opponent_name']
+                    opp_faction_json = requests.get(f"{req_uri}factions?name={opponent_name}")
+                    opp_faction_json_data = json.loads(opp_faction_json.text)
+
+                    for opp_system in opp_faction_json_data['docs'][0]['faction_presence']:
+                        if opp_system['conflicts']:
+                            if opp_system['conflicts'][0]['opponent_name_lower'] == self.FACTION_NAME:
+                                report[system['system_name']] = {
+                                    'state': system['conflicts'][0]['type'],
+                                    'win': self.stake_text(opp_system['conflicts'][0]['stake']),
+                                    'loss': self.stake_text(system['conflicts'][0]['stake']),
+                                    'updated_at': system['updated_at']
+                                }
+        if DEBUG:
+            print('Cached conflicts_pending:', report)
+        return report
+
     def get_conflicts_recovering(self, faction_data):
         report = {}
         for system in faction_data['docs'][0]['faction_presence']:
@@ -152,28 +174,6 @@ class Cache:
                                 }
         if DEBUG:
             print('Cached conflicts_recovering:', report)
-        return report
-
-    def get_conflicts_pending(self, faction_data):
-        report = {}
-        for system in faction_data['docs'][0]['faction_presence']:
-            if system['conflicts']:
-                if system['conflicts'][0]['status'] == 'pending':
-                    opponent_name = system['conflicts'][0]['opponent_name']
-                    opp_faction_json = requests.get(f"{req_uri}factions?name={opponent_name}")
-                    opp_faction_json_data = json.loads(opp_faction_json.text)
-
-                    for opp_system in opp_faction_json_data['docs'][0]['faction_presence']:
-                        if opp_system['conflicts']:
-                            if opp_system['conflicts'][0]['opponent_name_lower'] == self.FACTION_NAME:
-                                report[system['system_name']] = {
-                                    'state': system['conflicts'][0]['type'],
-                                    'win': self.stake_text(opp_system['conflicts'][0]['stake']),
-                                    'loss': self.stake_text(system['conflicts'][0]['stake']),
-                                    'updated_at': system['updated_at']
-                                }
-        if DEBUG:
-            print('Cached conflicts_pending:', report)
         return report
 
     def get_unvisited_systems(self, faction_data):
