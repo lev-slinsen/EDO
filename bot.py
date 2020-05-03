@@ -33,7 +33,12 @@ number_emoji = (':zero:', ':one:', ':two:', ':three:', ':four:', ':five:',
                 ':six:', ':seven:', ':eight:', ':nine:', ':keycap_ten:')
 errors_text = {1: '`Error` No such faction. Please check faction name and try again.',
                2: '`Error` Unable to add comment to this objective. '
-                  'Instead, try changing objective text with the `!event` command'}
+                  'Instead, try changing objective text with the `!event` command',
+               3: 'There is no event to delete.',
+               4: 'There are multiple events, please select the one to delete with respective number.',
+               5: 'Selected objective cannot be changed that way.',
+               6: "There's a different number of objectives, please try again.",
+               7: 'Typo?'}
 frontier_tz = pytz.timezone('UTC')
 frontier_time = datetime.now(frontier_tz)
 
@@ -67,7 +72,6 @@ class Objective:
         self.loss = ''
         self.updated_ago = ''
         self.comment = ''
-        self.new = True
         self.text = ''
 
     def updated_ago_text(self, updated_at):
@@ -140,6 +144,8 @@ class AutoReport:
             objective = self.objectives[objective_name]
             if objective.status == 'active':
                 report += await objective.conflict_active_text(num + 1, objective_name)
+            elif objective.status == 'event':
+                report += f'{number_emoji[num + 1]} {objective.text}\n\n'
         await bot.get_channel(CHANNEL_ADMIN).send(report)
 
     def report_active(self, conflicts_active):
@@ -193,9 +199,10 @@ async def purge_commands(channel_to):
 
 @bot.command(name='comment',
              brief='Adds comments to the report or objectives',
-             description='Adds text at the top of the report. '
-                         'To add comment to the specific objective, specify objective number as the first word. '
-                         'To remove comment, pass plain command or plain objective number to remove objective comment '
+             description='Adds text at the top of the report.\n'
+                         'To add comment to the specific objective, pass objective number as the first word.\n'
+                         'To remove general comment, pass plain command or '
+                         'objective number with no other text to remove comment for that objective.\n'
                          'To add multiple lines, wrap text into "".')
 @commands.has_role(ADMIN_ROLE)
 async def comment(ctx, arg_num=None, *args):
@@ -215,9 +222,78 @@ async def comment(ctx, arg_num=None, *args):
                         await bot.get_channel(CHANNEL_ADMIN).send(errors_text[2])
     else:
         auto_report.comment = f'{arg_num} ' + (' '.join(args))
+
     await purge_own_messages(CHANNEL_ADMIN)
     await auto_report.report_send()
     await purge_commands(CHANNEL_ADMIN)
+
+
+@bot.command(name='event',
+             brief='Adds event to the report',  # TODO: update help text
+             description='Adds text after comment and before active conflicts to the report. '
+                         'Marks it as the first objective. To remove objective, pass plain command. '
+                         'To add multiple lines, wrap text into "".')
+@commands.has_role(ADMIN_ROLE)
+async def event(ctx, arg_num=None, *args):
+    objectives = auto_report.objectives
+    if not arg_num:
+        count = 0
+        for objective in objectives:
+            if objective.startswith('event'):
+                count += 1
+        if count <= 0:
+            await bot.get_channel(CHANNEL_ADMIN).send(errors_text[3])
+        elif count >= 2:
+            await bot.get_channel(CHANNEL_ADMIN).send(errors_text[4])
+    elif arg_num.isnumeric():
+        print(arg_num)
+        print(len(objectives) + 1)
+        for num, objective in enumerate(objectives):
+            if objective == f'event {arg_num}' or objective == f'event {len(objectives) + 1}':
+                objectives[f'event {arg_num}'] = (' '.join(args))
+            else:
+                await bot.get_channel(CHANNEL_ADMIN).send(errors_text[5])
+                return
+    else:
+        objectives[f'event {len(objectives) + 1}'] = Objective()
+        objective = objectives[f'event {len(objectives)}']
+        objective.status = 'event'
+        objective.text = f'{arg_num} ' + (' '.join(args))
+
+    await purge_own_messages(CHANNEL_ADMIN)
+    await auto_report.report_send()
+    await purge_commands(CHANNEL_ADMIN)
+
+
+@bot.command(name='order',
+             brief='Reorders active conflicts',
+             description='Reorders active conflicts. Use a set of numbers with no spaces.')
+@commands.has_role(ADMIN_ROLE)
+async def order(ctx, arg):
+    new_order = OrderedDict()
+    if len(arg) != len(auto_report.objectives):
+        await bot.get_channel(CHANNEL_ADMIN).send(errors_text[6])
+        return
+    for num in range(1, len(auto_report.objectives) + 1):
+        if str(num) not in arg:
+            await bot.get_channel(CHANNEL_ADMIN).send(errors_text[7])
+            return
+    for n in arg:
+        for num, objective in enumerate(auto_report.objectives):
+            if num + 1 == int(n):
+                if objective.startswith('event'):
+                    # new_order[f'event {num}'] = objective[f'event {num}']
+                    pass
+                else:
+                    new_order[objective] = auto_report.objectives[objective]
+    auto_report.objectives = new_order
+
+    await purge_own_messages(CHANNEL_ADMIN)
+    await auto_report.report_send()
+    await purge_commands(CHANNEL_ADMIN)
+
+
+
 
 
 # class HourlyReport:
@@ -389,62 +465,6 @@ async def comment(ctx, arg_num=None, *args):
 #         await self.report_send()
 #
 #         await purge_commands(CHANNEL_ADMIN)
-#
-#
-
-
-
-# @bot.command(name='event',
-#              brief='Adds event to the report',  # TODO: update command description
-#              description='Adds text after comment and before active conflicts to the report. '
-#                          'Marks it as the first objective. To remove objective, pass plain command. '
-#                          'To add multiple lines, wrap text into "".')
-# @commands.has_role(ADMIN_ROLE)
-# async def event(ctx, arg_num=None, *args):
-#     if not arg_num:
-#         hr.event = {}
-#     elif not arg_num.isnumeric():
-#         hr.event[1] = f'{arg_num} '
-#         hr.event[1] += (' '.join(args))
-#     else:
-#         for num in range(1, int(arg_num)):
-#             if num not in hr.event:
-#                 hr.event[num] = ''
-#         hr.event[int(arg_num)] = (' '.join(args))
-#
-#         for num in range(len(hr.event), 0):
-#             print(num, int(arg_num))
-#             if not hr.event[int(arg_num)]:
-#                 hr.event.pop(num)
-#
-#     await hr.report_send()
-#     await purge_commands(CHANNEL_ADMIN)
-#
-#
-# @bot.command(name='order',
-#              brief='Reorders active conflicts',
-#              description='Reorders active conflicts. Use a set of numbers with no spaces.')
-# @commands.has_role(ADMIN_ROLE)
-# async def order(ctx, arg):
-#     new_order = OrderedDict()
-#     if len(arg) != len(hr.conflicts_active_order):
-#         await bot.get_channel(CHANNEL_ADMIN).send(f'There are {len(hr.conflicts_active_order)} active conflicts. '
-#                                                   f'Please try again.')
-#         return
-#
-#     for num in range(1, len(hr.conflicts_active_order) + 1):
-#         if str(num) not in arg:
-#             await bot.get_channel(CHANNEL_ADMIN).send(f'Typo?')
-#             return
-#
-#     for num in arg:
-#         for idx, conflict in enumerate(hr.conflicts_active_order):
-#             if idx + 1 == int(num):
-#                 new_order[conflict] = hr.conflicts_active_order[conflict]
-#     hr.conflicts_active_order = new_order
-#
-#     await hr.report_send()
-#     await purge_commands(CHANNEL_ADMIN)
 #
 #
 # @bot.command(name='seen',
