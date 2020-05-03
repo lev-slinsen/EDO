@@ -31,7 +31,9 @@ client = discord.Client()
 
 number_emoji = (':zero:', ':one:', ':two:', ':three:', ':four:', ':five:',
                 ':six:', ':seven:', ':eight:', ':nine:', ':keycap_ten:')
-errors_text = {1: '`Error` No such faction. Please check faction name and try again.'}
+errors_text = {1: '`Error` No such faction. Please check faction name and try again.',
+               2: '`Error` Unable to add comment to this objective. '
+                  'Instead, try changing objective text with the `!event` command'}
 frontier_tz = pytz.timezone('UTC')
 frontier_time = datetime.now(frontier_tz)
 
@@ -97,7 +99,7 @@ class Objective:
             text += f'On victory we gain: *{self.win}*\n'
         if self.loss:
             text += f'On defeat we lose: *{self.loss}*\n'
-        text += f'{self.updated_ago_text(self.updated_ago)}\n'
+        text += f'Updated {self.updated_ago_text(self.updated_ago)}\n'
         if self.comment:
             text += f'{self.comment}\n\n'
         else:
@@ -132,6 +134,8 @@ class AutoReport:
 
     async def report_send(self):
         report = f'Current objectives for {os.getenv("FACTION_NAME")}:\n\n'
+        if self.comment:
+            report += f'{self.comment}\n\n'
         for num, objective_name in enumerate(self.objectives):
             objective = self.objectives[objective_name]
             if objective.status == 'active':
@@ -182,6 +186,38 @@ async def purge_commands(channel_to):
     for message in await bot.get_channel(channel_to).history(limit=100).flatten():
         if message.content.startswith('!'):
             await message.delete()
+
+
+'''Commands I understand'''
+
+
+@bot.command(name='comment',
+             brief='Adds comments to the report or objectives',
+             description='Adds text at the top of the report. '
+                         'To add comment to the specific objective, specify objective number as the first word. '
+                         'To remove comment, pass plain command or plain objective number to remove objective comment '
+                         'To add multiple lines, wrap text into "".')
+@commands.has_role(ADMIN_ROLE)
+async def comment(ctx, arg_num=None, *args):
+    if not arg_num:
+        auto_report.comment = ''
+    elif arg_num.isnumeric():
+        arg_num = int(arg_num)
+        if 1 <= arg_num <= len(auto_report.objectives):
+            arg_num -= 1
+            for num, objective in enumerate(auto_report.objectives):
+                if int(arg_num) == num:
+                    auto_report.objectives[objective].comment = (' '.join(args))
+        else:
+            for num, objective in enumerate(auto_report.objectives):
+                if int(arg_num) == num:
+                    if auto_report.objectives[objective].status != 'active':
+                        await bot.get_channel(CHANNEL_ADMIN).send(errors_text[2])
+    else:
+        auto_report.comment = f'{arg_num} ' + (' '.join(args))
+    await purge_own_messages(CHANNEL_ADMIN)
+    await auto_report.report_send()
+    await purge_commands(CHANNEL_ADMIN)
 
 
 # class HourlyReport:
@@ -355,21 +391,9 @@ async def purge_commands(channel_to):
 #         await purge_commands(CHANNEL_ADMIN)
 #
 #
-# '''Commands I understand'''
-#
-#
-# @bot.command(name='comment',
-#              brief='Adds comment to the report',
-#              description='Adds text at the top of the report. To remove comment, pass plain command. '
-#                          'To add multiple lines, wrap text into "".')
-# @commands.has_role(ADMIN_ROLE)
-# async def comment(ctx, *args):
-#     hr.comment = (' '.join(args))
-#
-#     await hr.report_send()
-#     await purge_commands(CHANNEL_ADMIN)
-#
-#
+
+
+
 # @bot.command(name='event',
 #              brief='Adds event to the report',  # TODO: update command description
 #              description='Adds text after comment and before active conflicts to the report. '
