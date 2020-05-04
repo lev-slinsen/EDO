@@ -70,7 +70,7 @@ class Cache:
                 elif station_json_data['docs'][0]['type'] == 'megaship':
                     self.stations[station] = f'Megaship, L'
                 elif station_json_data['docs'][0]['type'][-7:] == 'outpost':
-                    self.stations[station] = f'Orbis starport, M'
+                    self.stations[station] = f'Outpost, M'
                 else:
                     self.stations[station] = f'**Unknown type**'
 

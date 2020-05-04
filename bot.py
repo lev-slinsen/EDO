@@ -36,7 +36,7 @@ errors_text = {1: '`Error` No such faction. Please check faction name and try ag
                   'Instead, try changing objective text with the `!event` command',
                3: 'There is no event to delete.',
                4: 'There are multiple events, please select the one to delete with respective number.',
-               5: 'Selected objective cannot be changed that way.',
+               5: 'Incorrect event selected for change.',
                6: "There's a different number of objectives, please try again.",
                7: 'Typo?'}
 frontier_tz = pytz.timezone('UTC')
@@ -89,7 +89,7 @@ class Objective:
         return text
 
     async def conflict_active_text(self, num, system_name):
-        text = '{0} {1} in {2}\n' \
+        text = '{0} {1} in **{2}**\n' \
                '{3} [ {4} - {5} ] {6}\n'.format(
                 number_emoji[num],
                 self.state.capitalize(),
@@ -105,7 +105,7 @@ class Objective:
             text += f'On defeat we lose: *{self.loss}*\n'
         text += f'Updated {self.updated_ago_text(self.updated_ago)}\n'
         if self.comment:
-            text += f'{self.comment}\n\n'
+            text += f'\n{self.comment}\n\n'
         else:
             text += '\n'
         return text
@@ -152,7 +152,7 @@ class AutoReport:
         for conflict in conflicts_active:
             for old_objective in self.objectives:
                 if old_objective not in conflicts_active:
-                    self.objectives.popitem(conflict)
+                    self.objectives.pop(conflict)
             if conflict not in self.objectives:
                 self.objectives[conflict] = Objective()
                 objective = self.objectives[conflict]
@@ -166,9 +166,9 @@ class AutoReport:
                 objective.updated_ago = conflicts_active[conflict]['updated_at']
             else:
                 objective = self.objectives[conflict]
-                objective.score_us = conflict['score_us']
-                objective.score_them = conflict['score_them']
-                objective.updated_ago = conflict['updated_at']
+                objective.score_us = conflicts_active[conflict]['score_us']
+                objective.score_them = conflicts_active[conflict]['score_them']
+                objective.updated_ago = conflicts_active[conflict]['updated_at']
 
 
 # @bot.event
@@ -229,9 +229,11 @@ async def comment(ctx, arg_num=None, *args):
 
 
 @bot.command(name='event',
-             brief='Adds event to the report',  # TODO: update help text
-             description='Adds text after comment and before active conflicts to the report. '
-                         'Marks it as the first objective. To remove objective, pass plain command. '
+             brief='Adds event to the report',
+             description='Adds a custom event to the objectives list.\n'
+                         "To change a specific event, pass it's number on the list first\n"
+                         "To remove an event, pass empty command. "
+                         "If there are multiple events, pass only it's number with no further words\n"
                          'To add multiple lines, wrap text into "".')
 @commands.has_role(ADMIN_ROLE)
 async def event(ctx, arg_num=None, *args):
@@ -243,17 +245,25 @@ async def event(ctx, arg_num=None, *args):
                 count += 1
         if count <= 0:
             await bot.get_channel(CHANNEL_ADMIN).send(errors_text[3])
+            return
         elif count >= 2:
             await bot.get_channel(CHANNEL_ADMIN).send(errors_text[4])
+            return
+        else:
+            for objective in objectives:
+                if objective.startswith('event'):
+                    objectives.pop(objective)
     elif arg_num.isnumeric():
-        print(arg_num)
-        print(len(objectives) + 1)
+        changed = 0
         for num, objective in enumerate(objectives):
-            if objective == f'event {arg_num}' or objective == f'event {len(objectives) + 1}':
-                objectives[f'event {arg_num}'] = (' '.join(args))
-            else:
-                await bot.get_channel(CHANNEL_ADMIN).send(errors_text[5])
-                return
+            if objective == f'event {arg_num}':
+                objectives[f'event {arg_num}'].text = (' '.join(args))
+                changed += 1
+        if changed == 0:
+            await bot.get_channel(CHANNEL_ADMIN).send(errors_text[5])
+            return
+        if not args:
+            objectives.pop(f'event {arg_num}')
     else:
         objectives[f'event {len(objectives) + 1}'] = Objective()
         objective = objectives[f'event {len(objectives)}']
@@ -266,8 +276,8 @@ async def event(ctx, arg_num=None, *args):
 
 
 @bot.command(name='order',
-             brief='Reorders active conflicts',
-             description='Reorders active conflicts. Use a set of numbers with no spaces.')
+             brief='Puts objectives in a different order',
+             description='Puts objectives in a different order. Pass a set of numbers with no spaces.')
 @commands.has_role(ADMIN_ROLE)
 async def order(ctx, arg):
     new_order = OrderedDict()
@@ -278,12 +288,12 @@ async def order(ctx, arg):
         if str(num) not in arg:
             await bot.get_channel(CHANNEL_ADMIN).send(errors_text[7])
             return
-    for n in arg:
+    for idx, arg_num in enumerate(arg):
+        arg_num = int(arg_num)
         for num, objective in enumerate(auto_report.objectives):
-            if num + 1 == int(n):
+            if num + 1 == arg_num:
                 if objective.startswith('event'):
-                    # new_order[f'event {num}'] = objective[f'event {num}']
-                    pass
+                    new_order[f'event {idx + 1}'] = auto_report.objectives[f'event {num + 1}']
                 else:
                     new_order[objective] = auto_report.objectives[objective]
     auto_report.objectives = new_order
@@ -318,60 +328,6 @@ async def order(ctx, arg):
 #         else:
 #             text = f'{updated_ago} hours ago.'
 #         return text
-#
-#     def report_active(self, conflicts_active, start_num):
-#         text = ''
-#         if len(conflicts_active) == 0:
-#             text = 'No ongoing conflicts :sleeping:\n\n'
-#         else:
-#             for conflict in conflicts_active:
-#                 if conflict not in self.conflicts_active_order:
-#                     self.conflicts_active_order[conflict] = {
-#                         'score_us': conflicts_active[conflict]['score_us'],
-#                         'score_them': conflicts_active[conflict]['score_them'],
-#                         'new': True
-#                     }
-#             for idx, conflict in enumerate(self.conflicts_active_order):
-#                 if conflict not in conflicts_active:
-#                     self.conflicts_active_order.pop(conflict)
-#                 else:
-#                     score_us = conflicts_active[conflict]["score_us"]
-#                     if conflicts_active[conflict]['score_us'] != self.conflicts_active_order[conflict]['score_us']:
-#                         score_us = f'**{conflicts_active[conflict]["score_us"]}**'
-#
-#                     score_them = conflicts_active[conflict]["score_them"]
-#                     if conflicts_active[conflict]['score_them'] != self.conflicts_active_order[conflict]['score_them']:
-#                         score_them = f'**{conflicts_active[conflict]["score_them"]}**'
-#
-#                     system = conflict
-#                     if self.conflicts_active_order[conflict]['new']:
-#                         system = f'**{conflict}**:exclamation:'
-#
-#                     num = number_emoji[idx + start_num]
-#                     text += '{0} - {1} in {2}\n' \
-#                             '{3} [ {4} - {5} ] {6}\n'.format(
-#                              num,
-#                              conflicts_active[conflict]["state"].capitalize(),
-#                              system,
-#                              os.getenv("FACTION_NAME"),
-#                              score_us,
-#                              score_them,
-#                              conflicts_active[conflict]["opponent"],
-#                              )
-#                     if conflicts_active[conflict]['win']:
-#                         text += f'On victory we gain: *{conflicts_active[conflict]["win"]}*\n'
-#                     if conflicts_active[conflict]['loss']:
-#                         text += f'On defeat we lose: *{conflicts_active[conflict]["loss"]}*\n'
-#                     if not conflicts_active[conflict]['win'] and not conflicts_active[conflict]['loss']:
-#                         text += '*No stakes*\n'
-#
-#                     updated_at = conflicts_active[conflict]["updated_at"]
-#                     updated_at_time = frontier_tz.localize(datetime.strptime(updated_at[0:16], '%Y-%m-%dT%H:%M'))
-#                     if (frontier_time - updated_at_time) >= timedelta(hours=12):
-#                         text += f'Last updated: **{self.updated_ago_text(updated_at)}**\n\n'
-#                     else:
-#                         text += f'Last updated: {self.updated_ago_text(updated_at)}\n\n'
-#         self.report += text
 #
 #     def report_pending(self, conflicts_pending):
 #         text = ''
