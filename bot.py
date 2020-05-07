@@ -31,14 +31,16 @@ client = discord.Client()
 
 number_emoji = (':zero:', ':one:', ':two:', ':three:', ':four:', ':five:',
                 ':six:', ':seven:', ':eight:', ':nine:', ':keycap_ten:')
-errors_text = {1: '`Error` No such faction. Please check faction name and try again.',
-               2: '`Error` Unable to add comment to this objective. '
-                  'Instead, try changing objective text with the `!event` command',
-               3: 'There is no event to delete.',
-               4: 'There are multiple events, please select the one to delete with respective number.',
-               5: 'Incorrect event selected for change.',
-               6: "There's a different number of objectives, please try again.",
-               7: 'Typo?'}
+errors_text = {1: '`No such faction. Please check faction name and try again.`',
+               2: '`Unable to add comment to this objective. '
+                  'Instead, try changing objective text with the "!event" command.`',
+               3: '`There is no event to delete.`',
+               4: '`There are multiple events, please select the one to delete with respective the number.`',
+               5: '`Incorrect event selected for change.`',
+               6: "`There's a different number of objectives, please try again.`",
+               7: '`Typo?`',
+               8: '`This message will self-update every 30 minutes. '
+                  'Please mention outside of this report to avoid mention spam.`'}
 frontier_tz = pytz.timezone('UTC')
 frontier_time = datetime.now(frontier_tz)
 
@@ -73,19 +75,31 @@ class Objective:
         self.updated_ago = ''
         self.comment = ''
         self.text = ''
+        self.new = []
 
-    def updated_ago_text(self, updated_at):
-        updated_at = frontier_tz.localize(datetime.strptime(updated_at[0:16], '%Y-%m-%dT%H:%M'))
-        updated_ago = str(frontier_time - updated_at)[:-13]
+    async def updated_ago_text(self, updated_at_data):
+        updated_at = frontier_tz.localize(datetime.strptime(updated_at_data[0:16], '%Y-%m-%dT%H:%M'))
+        highlight = False
+        if frontier_time - updated_at >= timedelta(hours=12):
+            highlight = True
+        updated_ago = frontier_time - updated_at
+        if updated_ago < timedelta(seconds=0):    # Prevents random bug that subtracts 2 days from timedelta
+            print('ALERT!', updated_ago)
+            updated_ago += timedelta(days=1)
+            updated_ago = timedelta(days=1) + updated_ago
+            print(updated_ago)
+        updated_ago_text = str(updated_ago).split(':')[0]
         if (
-                updated_ago[-2:] == '1' or
-                updated_ago[-2:] == '21'
+                updated_ago_text[-2:] == '1' or
+                updated_ago_text[-2:] == '21'
         ):
-            text = f'{updated_ago} hour ago.'
-        elif updated_ago[-2:] == '0':
-            text = 'less than an hour ago.'
+            text = f'{updated_ago_text} hour ago'
+        elif updated_ago_text[-2:] == '0':
+            text = 'less than an hour ago'
         else:
-            text = f'{updated_ago} hours ago.'
+            text = f'{updated_ago_text} hours ago'
+        if highlight:
+            text = f'**{text}**'
         return text
 
     async def conflict_active_text(self, num, system_name):
@@ -103,11 +117,41 @@ class Objective:
             text += f'On victory we gain: *{self.win}*\n'
         if self.loss:
             text += f'On defeat we lose: *{self.loss}*\n'
-        text += f'Updated {self.updated_ago_text(self.updated_ago)}\n'
+        if not self.win and not self.loss:
+            text += '*No stakes*'
+        updated_ago_text = await self.updated_ago_text(self.updated_ago)
+        text += f'Updated {updated_ago_text}.\n'
         if self.comment:
             text += f'\n{self.comment}\n\n'
         else:
             text += '\n'
+        return text
+
+    async def conflict_pending_text(self, system_name):
+        text = f':arrow_up: *Pending* {self.state} in {system_name}.\n' \
+               f'Opponent: {self.opponent}\n'
+        if self.win:
+            text += f'On victory we gain: *{self.win}*\n'
+        if self.loss:
+            text += f'On defeat we lose: *{self.loss}*\n'
+        if not self.win and not self.loss:
+            text += '*No stakes*'
+        updated_ago_text = await self.updated_ago_text(self.updated_ago)
+        text += f'Updated {updated_ago_text}.\n\n'
+        return text
+
+    async def conflict_recovering_text(self, system_name):
+        text = f':arrow_down: *Recovering* from {self.state} in {system_name}.\n'
+        if self.status == 'victory':
+            if self.win:
+                text += f'We won *{self.win}*.\n\n'
+            else:
+                text += 'We won!\n\n'
+        elif self.status == 'defeat':
+            if self.win:
+                text += f'We lost *{self.win}*.\n\n'
+            else:
+                text += 'We lost!\n\n'
         return text
 
 
@@ -131,28 +175,36 @@ class AutoReport:
         await purge_commands(CHANNEL_ADMIN)
 
     async def objectives_collect(self):
-        self.report_active(self.cache.conflicts_active)
-        # self.report_pending(self.cache.conflicts_pending)
-        # self.report_recovering(self.cache.conflicts_recovering)
+        await self.report_active(self.cache.conflicts_active)
+        await self.report_pending(self.cache.conflicts_pending)
+        await self.report_recovering(self.cache.conflicts_recovering)
         # self.unvisited_systems_text(self.cache.unvisited_systems)
 
     async def report_send(self):
         report = f'Current objectives for {os.getenv("FACTION_NAME")}:\n\n'
         if self.comment:
             report += f'{self.comment}\n\n'
-        for num, objective_name in enumerate(self.objectives):
-            objective = self.objectives[objective_name]
+        for num, objective_active in enumerate(self.objectives):
+            objective = self.objectives[objective_active]
             if objective.status == 'active':
-                report += await objective.conflict_active_text(num + 1, objective_name)
+                report += await objective.conflict_active_text(num + 1, objective_active)
             elif objective.status == 'event':
                 report += f'{number_emoji[num + 1]} {objective.text}\n\n'
+        for objective_pending in self.objectives:
+            objective = self.objectives[objective_pending]
+            if objective.status == 'pending':
+                report += await objective.conflict_pending_text(objective_pending)
+        for objective_recovering in self.objectives:
+            objective = self.objectives[objective_recovering]
+            if objective.status == 'victory' or objective.status == 'defeat':
+                report += await objective.conflict_recovering_text(objective_recovering)
         await bot.get_channel(CHANNEL_ADMIN).send(report)
 
-    def report_active(self, conflicts_active):
+    async def report_active(self, conflicts_active):
+        for old_objective in self.objectives:
+            if self.objectives[old_objective].status == 'active' and old_objective not in conflicts_active:
+                self.objectives.pop(old_objective)
         for conflict in conflicts_active:
-            for old_objective in self.objectives:
-                if old_objective not in conflicts_active:
-                    self.objectives.pop(conflict)
             if conflict not in self.objectives:
                 self.objectives[conflict] = Objective()
                 objective = self.objectives[conflict]
@@ -166,20 +218,56 @@ class AutoReport:
                 objective.updated_ago = conflicts_active[conflict]['updated_at']
             else:
                 objective = self.objectives[conflict]
+                objective.status = 'active'
+                if objective.score_us != conflicts_active[conflict]['score_us']:
+                    objective.new.append('score_us')
+                    if 'score_them' in objective.new:
+                        objective.new.remove('score_them')
+                if objective.score_them != conflicts_active[conflict]['score_them']:
+                    objective.new.append('score_them')
+                    if 'score_us' in objective.new:
+                        objective.new.remove('score_us')
                 objective.score_us = conflicts_active[conflict]['score_us']
                 objective.score_them = conflicts_active[conflict]['score_them']
                 objective.updated_ago = conflicts_active[conflict]['updated_at']
 
+    async def report_pending(self, conflicts_pending):
+        for old_objective in self.objectives:
+            if self.objectives[old_objective].status == 'pending' and old_objective not in conflicts_pending:
+                self.objectives.pop(old_objective)
+        for conflict in conflicts_pending:
+            if conflict not in self.objectives:
+                self.objectives[conflict] = Objective()
+                objective = self.objectives[conflict]
+                objective.status = 'pending'
+                objective.state = conflicts_pending[conflict]['state']
+                objective.opponent = conflicts_pending[conflict]['opponent']
+                objective.win = conflicts_pending[conflict]['win']
+                objective.loss = conflicts_pending[conflict]['loss']
+                objective.updated_ago = conflicts_pending[conflict]['updated_at']
+            else:
+                objective = self.objectives[conflict]
+                objective.updated_ago = conflicts_pending[conflict]['updated_at']
 
-# @bot.event
-# async def on_message(message):
-#     if (
-#             message.author == bot.user and
-#             auto_report.message_start in message.content
-#     ):
-#         global report_message_id
-#         report_message_id = message.id
-#     await bot.process_commands(message)
+    async def report_recovering(self, conflicts_recovering):
+        for old_objective in self.objectives:
+            if (
+                    (self.objectives[old_objective].status == 'defeat' or
+                     self.objectives[old_objective].status == 'victory') and
+                    old_objective not in conflicts_recovering
+            ):
+                self.objectives.pop(old_objective)
+        for conflict in conflicts_recovering:
+            if conflict not in self.objectives:
+                self.objectives[conflict] = Objective()
+                objective = self.objectives[conflict]
+                objective.status = conflicts_recovering[conflict]['status']
+                objective.state = conflicts_recovering[conflict]['state']
+                objective.win = conflicts_recovering[conflict]['stake']
+                objective.updated_ago = conflicts_recovering[conflict]['updated_at']
+            else:
+                objective = self.objectives[conflict]
+                objective.updated_ago = conflicts_recovering[conflict]['updated_at']
 
 
 async def purge_own_messages(channel_to):
@@ -199,13 +287,20 @@ async def purge_commands(channel_to):
 
 @bot.command(name='comment',
              brief='Adds comments to the report or objectives',
-             description='Adds text at the top of the report.\n'
-                         'To add comment to the specific objective, pass objective number as the first word.\n'
-                         'To remove general comment, pass plain command or '
-                         'objective number with no other text to remove comment for that objective.\n'
-                         'To add multiple lines, wrap text into "".')
+             description='!comment [your_text] - Adds text at the top of the report.\n'
+                         '!comment - Removes general comment\n'
+                         '!comment [objective_number] [your_text] - Adds comment to the specified objective.\n'
+                         '!comment [objective_number] - Removes an objective comment.\n'
+                         'To add multiple lines, wrap comment text into "".')
 @commands.has_role(ADMIN_ROLE)
 async def comment(ctx, arg_num=None, *args):
+    if '<@' in arg_num:
+        await bot.get_channel(CHANNEL_ADMIN).send(errors_text[8])
+        return
+    for arg in args:
+        if '<@' in arg:
+            await bot.get_channel(CHANNEL_ADMIN).send(errors_text[8])
+            return
     if not arg_num:
         auto_report.comment = ''
     elif arg_num.isnumeric():
@@ -230,13 +325,20 @@ async def comment(ctx, arg_num=None, *args):
 
 @bot.command(name='event',
              brief='Adds event to the report',
-             description='Adds a custom event to the objectives list.\n'
-                         "To change a specific event, pass it's number on the list first\n"
-                         "To remove an event, pass empty command. "
-                         "If there are multiple events, pass only it's number with no further words\n"
-                         'To add multiple lines, wrap text into "".')
+             description='!event [your_text] - Adds a new custom objective.\n'
+                         '!event [objective_number] [your_text] - Changes text for the specified objective.\n'
+                         '!event - Removes the custom objective, but only if there is only one.\n'
+                         '!event [objective_number] - Removes the specified custom objective.\n'
+                         'To add multiple lines, wrap objective text into "".')
 @commands.has_role(ADMIN_ROLE)
 async def event(ctx, arg_num=None, *args):
+    if '<@' in arg_num:
+        await bot.get_channel(CHANNEL_ADMIN).send(errors_text[8])
+        return
+    for arg in args:
+        if '<@' in arg:
+            await bot.get_channel(CHANNEL_ADMIN).send(errors_text[8])
+            return
     objectives = auto_report.objectives
     if not arg_num:
         count = 0
@@ -303,75 +405,17 @@ async def order(ctx, arg):
     await purge_commands(CHANNEL_ADMIN)
 
 
+# @bot.event
+# async def on_message(message):
+#     if (
+#             message.author == bot.user and
+#             auto_report.message_start in message.content
+#     ):
+#         global report_message_id
+#         report_message_id = message.id
+#     await bot.process_commands(message)
 
 
-
-# class HourlyReport:
-#     def __init__(self, bot):
-#         self.bot = bot
-#         self.conflicts_active_order = OrderedDict()
-#         self.message_start = f'Current objectives for {os.getenv("FACTION_NAME")}:\n\n'
-#         self.comment = ''
-#         self.event = {}
-#         self.report_message_id = 0
-#
-#     def updated_ago_text(self, updated_at):
-#         updated_at = frontier_tz.localize(datetime.strptime(updated_at[0:16], '%Y-%m-%dT%H:%M'))
-#         updated_ago = str(frontier_time - updated_at)[:-13]
-#         if (
-#                 updated_ago[-2:] == '1' or
-#                 updated_ago[-2:] == '21'
-#         ):
-#             text = f'{updated_ago} hour ago.'
-#         elif updated_ago[-2:] == '0':
-#             text = 'less than an hour ago.'
-#         else:
-#             text = f'{updated_ago} hours ago.'
-#         return text
-#
-#     def report_pending(self, conflicts_pending):
-#         text = ''
-#         if len(conflicts_pending) == 0:
-#             pass
-#         else:
-#             for conflict in conflicts_pending:
-#                 state = conflicts_pending[conflict]["state"]
-#                 text += f':arrow_up: - *Pending* {state.capitalize()} in {conflict}\n'
-#
-#                 if conflicts_pending[conflict]['win']:
-#                     text += f'On victory we gain: *{conflicts_pending[conflict]["win"]}*\n'
-#                 if conflicts_pending[conflict]['loss']:
-#                     text += f'On defeat we lose: *{conflicts_pending[conflict]["loss"]}*\n'
-#                 if not conflicts_pending[conflict]['win'] and not conflicts_pending[conflict]['loss']:
-#                     text += '*No stakes*\n'
-#
-#                 updated_at = conflicts_pending[conflict]["updated_at"]
-#                 updated_at_time = frontier_tz.localize(datetime.strptime(updated_at[0:16], '%Y-%m-%dT%H:%M'))
-#                 if (frontier_time - updated_at_time) >= timedelta(hours=12):
-#                     text += f'Last updated: **{self.updated_ago_text(updated_at)}**\n\n'
-#                 else:
-#                     text += f'Last updated: {self.updated_ago_text(updated_at)}\n\n'
-#         self.report += text
-#
-#     def report_recovering(self, conflicts_recovering):
-#         text = ''
-#         if len(conflicts_recovering) == 0:
-#             pass
-#         else:
-#             for conflict in conflicts_recovering:
-#                 state = conflicts_recovering[conflict]["state"]
-#                 status = conflicts_recovering[conflict]["status"]
-#                 stake = conflicts_recovering[conflict]["stake"]
-#                 text += f':arrow_down: - *Recovering* from {state.capitalize()} in {conflict} - {status.capitalize()}'
-#                 if stake:
-#                     if status == 'victory':
-#                         text += f', we won *{stake}*\n\n'
-#                     if status == 'defeat':
-#                         text += f', we lost *{stake}*\n\n'
-#                 else:
-#                     text += '!\n\n'
-#         self.report += text
-#
 #     def unvisited_systems_text(self, unvisited_systems):
 #         text = 'Systems unchecked for:\n'
 #         lines = 1
@@ -391,50 +435,6 @@ async def order(ctx, arg):
 #         elif lines == 2:
 #             text = text.replace(':\n', ' ')
 #         self.report += text
-#
-#     async def report_send(self):
-#         self.report = ''
-#         start_num = len(self.event) + 1
-#         self.report_active(self.cache.conflicts_active, start_num)
-#         self.report_pending(self.cache.conflicts_pending)
-#         self.report_recovering(self.cache.conflicts_recovering)
-#         self.unvisited_systems_text(self.cache.unvisited_systems)
-#
-#         await purge_own_messages(CHANNEL_ADMIN)
-#
-#         report = self.message_start
-#         if self.comment:
-#             report += f'{self.comment}\n\n'
-#         if self.event:
-#             for ev in self.event:
-#                 report += f'{number_emoji[ev]} - {self.event[ev]}\n\n'
-#         report += self.report
-#         await bot.get_channel(CHANNEL_ADMIN).send(report)
-#
-#     @tasks.loop(minutes=30)
-#     async def report_loop(self):
-#         await bot.get_channel(CHANNEL_ADMIN).send(f'`Updating report...`')
-#         self.cache = Cache()
-#         if self.cache.faction_data['error'] != 0:
-#             await bot.get_channel(CHANNEL_ADMIN).send(errors_text[self.cache.faction_data['error']])
-#             return
-#         await self.report_send()
-#
-#         await purge_commands(CHANNEL_ADMIN)
-#
-#
-# @bot.command(name='seen',
-#              brief='Marks report as seen and removes highlights',
-#              description='Marks report as seen and removes highlights')
-# @commands.has_role(ADMIN_ROLE)
-# async def seen(ctx):
-#     for conflict in hr.conflicts_active_order:
-#         hr.conflicts_active_order[conflict]['score_us'] = hr.cache.conflicts_active[conflict]['score_us']
-#         hr.conflicts_active_order[conflict]['score_them'] = hr.cache.conflicts_active[conflict]['score_them']
-#         hr.conflicts_active_order[conflict]['new'] = False
-#
-#     await hr.report_send()
-#     await purge_commands(CHANNEL_ADMIN)
 #
 #
 # @bot.command(name='faction',

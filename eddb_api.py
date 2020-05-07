@@ -132,6 +132,7 @@ class Cache:
                             if opp_system['conflicts'][0]['opponent_name_lower'] == self.FACTION_NAME:
                                 report[system['system_name']] = {
                                     'state': system['conflicts'][0]['type'],
+                                    'opponent': system['conflicts'][0]['opponent_name'],
                                     'win': self.stake_text(opp_system['conflicts'][0]['stake']),
                                     'loss': self.stake_text(system['conflicts'][0]['stake']),
                                     'updated_at': system['updated_at']
@@ -167,8 +168,6 @@ class Cache:
                                 report[system['system_name']] = {
                                     'state': system['conflicts'][0]['type'],
                                     'status': status,
-                                    'days_won': days_won,
-                                    'days_lost': opp_days_won,
                                     'stake': self.stake_text(stake),
                                     'updated_at': system['updated_at']
                                 }
@@ -200,8 +199,8 @@ class Cache:
         if self.faction_data['error'] != 0:
             return
         self.conflicts_active = self.get_conflicts_active(self.faction_data)
-        self.conflicts_recovering = self.get_conflicts_recovering(self.faction_data)
         self.conflicts_pending = self.get_conflicts_pending(self.faction_data)
+        self.conflicts_recovering = self.get_conflicts_recovering(self.faction_data)
         self.unvisited_systems = self.get_unvisited_systems(self.faction_data)
 
     def __call__(self):
