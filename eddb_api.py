@@ -42,6 +42,32 @@ class Cache:
 
         return faction_json_data
 
+    def updated_ago_text(self, updated_at_data):
+        updated_at = frontier_tz.localize(datetime.strptime(updated_at_data[0:16], '%Y-%m-%dT%H:%M'))
+        highlight = False
+        updated_ago = frontier_time - updated_at
+        if updated_ago < timedelta(seconds=0):    # Prevents random bug that subtracts 2 days from timedelta
+            print('!ALERT')
+        #     updated_ago += timedelta(days=1)
+        #     updated_ago = timedelta(days=1) - updated_ago
+        # if updated_ago < timedelta(seconds=0):
+        #     updated_ago = timedelta(days=1)
+        if updated_ago >= timedelta(hours=12):
+            highlight = True
+        updated_ago_text = str(updated_ago).split(':')[0]
+        if (
+                updated_ago_text[-2:] == '1' or
+                updated_ago_text[-2:] == '21'
+        ):
+            text = f'{updated_ago_text} hour ago'
+        elif updated_ago_text[-2:] == '0':
+            text = 'less than an hour ago'
+        else:
+            text = f'{updated_ago_text} hours ago'
+        if highlight:
+            text = f'**{text}**'
+        return text
+
     def stake_text(self, station):
         text = ''
         if (
@@ -112,7 +138,7 @@ class Cache:
                                 'score_them': conflict[them]['days_won'],
                                 'win': self.stake_text(conflict[them]['stake']),
                                 'loss': self.stake_text(conflict[us]['stake']),
-                                'updated_at': system['updated_at']
+                                'updated_ago': self.updated_ago_text(system['updated_at'])
                             }
         if DEBUG:
             print('Cached conflicts_active:', report)
@@ -135,7 +161,7 @@ class Cache:
                                     'opponent': system['conflicts'][0]['opponent_name'],
                                     'win': self.stake_text(opp_system['conflicts'][0]['stake']),
                                     'loss': self.stake_text(system['conflicts'][0]['stake']),
-                                    'updated_at': system['updated_at']
+                                    'updated_ago': self.updated_ago_text(system['updated_at'])
                                 }
         if DEBUG:
             print('Cached conflicts_pending:', report)
@@ -169,7 +195,7 @@ class Cache:
                                     'state': system['conflicts'][0]['type'],
                                     'status': status,
                                     'stake': self.stake_text(stake),
-                                    'updated_at': system['updated_at']
+                                    'updated_ago': self.updated_ago_text(system['updated_at'])
                                 }
         if DEBUG:
             print('Cached conflicts_recovering:', report)
@@ -190,7 +216,7 @@ class Cache:
                 if updated_ago >= timedelta(days=7):
                     report[7].append(system['system_name'])
         if DEBUG:
-            print('Cached unvisited_systems:', report, '\n')
+            print('Cached unvisited_systems:', report)
         return report
 
     def __init__(self):
@@ -202,6 +228,8 @@ class Cache:
         self.conflicts_pending = self.get_conflicts_pending(self.faction_data)
         self.conflicts_recovering = self.get_conflicts_recovering(self.faction_data)
         self.unvisited_systems = self.get_unvisited_systems(self.faction_data)
+        if DEBUG:
+            print('Cache init done')
 
     def __call__(self):
         return (self.conflicts_active,
