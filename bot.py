@@ -14,7 +14,6 @@ from eddb_api import Cache
 
 # TODO: check for number of symbols in report (max 2000)
 # TODO: add command for checking the best LTD selling station
-# TODO: aiohttp for requests
 # TODO: add logging
 # TODO: add reaction mechanics
 # TODO: add links to systems and stations on EDDB or Inara
@@ -95,6 +94,7 @@ class AutoReport:
             print(f'{frontier_time}: report_loop start')
         await bot.get_channel(CHANNEL_ADMIN).send(f'`Updating report...`')
         self.cache = Cache()
+        await self.cache.gather_data()
         if self.cache.faction_data['error'] != 0:
             await bot.get_channel(CHANNEL_ADMIN).send(errors_text[self.cache.faction_data['error']])
             return
@@ -444,6 +444,10 @@ async def order(ctx, arg):
     await auto_report.report_send()
     await purge_commands(CHANNEL_ADMIN)
 
+
+@bot.command(name='ltd')
+async def ltd(ctx):
+    pass
 
 # @bot.event
 # async def on_message(message):
