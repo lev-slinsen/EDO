@@ -13,7 +13,7 @@ from dotenv import load_dotenv
 from eddb_api import Cache
 
 # TODO: check for number of symbols in report (max 2000)
-# TODO: add command for checking the best LTD selling station
+# TODO: refactor LTD systems command
 # TODO: add logging
 # TODO: add reaction mechanics
 # TODO: add links to systems and stations on EDDB or Inara
@@ -273,7 +273,7 @@ class Objective:
 
     async def conflict_active_text(self, num, system_name):
         text = '{0} {1} in **{2}**\n' \
-               '{3} [ {4} - {5} ] {6}\n'.format(
+               '> {3} [ {4} - {5} ] {6}\n'.format(
                 number_emoji[num],
                 self.state.capitalize(),
                 system_name,
@@ -283,11 +283,11 @@ class Objective:
                 self.opponent
                 )
         if self.win:
-            text += f'On victory we gain: *{self.win}*\n'
+            text += f'> On victory we gain: *{self.win}*\n'
         if self.loss:
-            text += f'On defeat we lose: *{self.loss}*\n'
+            text += f'> On defeat we lose: *{self.loss}*\n'
         if not self.win and not self.loss:
-            text += '*No stakes*\n'
+            text += '> *No stakes*\n'
         text += f'Updated {self.updated_ago}.\n'
         if self.comment:
             text += f'\n{self.comment}\n\n'
@@ -297,13 +297,13 @@ class Objective:
 
     async def conflict_pending_text(self, system_name):
         text = f':arrow_up: *Pending* {self.state} in {system_name}.\n' \
-               f'Opponent: {self.opponent}\n'
+               f'> Opponent: {self.opponent}\n'
         if self.win:
-            text += f'On victory we gain: *{self.win}*\n'
+            text += f'> On victory we gain: *{self.win}*\n'
         if self.loss:
-            text += f'On defeat we lose: *{self.loss}*\n'
+            text += f'> On defeat we lose: *{self.loss}*\n'
         if not self.win and not self.loss:
-            text += '*No stakes*\n'
+            text += '> *No stakes*\n'
         text += f'Updated {self.updated_ago}.\n\n'
         return text
 
@@ -311,14 +311,14 @@ class Objective:
         text = f':arrow_down: *Recovering* from {self.state} in {system_name}.\n'
         if self.status == 'victory':
             if self.win:
-                text += f'We won *{self.win}*\n\n'
+                text += f'> We won *{self.win}*\n\n'
             else:
-                text += 'We won!\n\n'
+                text += '> We won!\n\n'
         elif self.status == 'defeat':
             if self.win:
-                text += f'We lost *{self.win}*\n\n'
+                text += f'> We lost *{self.win}*\n\n'
             else:
-                text += 'We lost!\n\n'
+                text += '> We lost!\n\n'
         return text
 
 
@@ -447,7 +447,22 @@ async def order(ctx, arg):
 
 @bot.command(name='ltd')
 async def ltd(ctx):
-    pass
+    if len(auto_report.cache.ltd_systems) == 0:
+        text = '`No suitable systems at this moment`'
+    else:
+        text = 'Best places to sell your :gem:\n'
+        for system in auto_report.cache.ltd_systems:
+            text += f'**{system}**:'
+            for station in auto_report.cache.ltd_systems[system]:
+                if len(auto_report.cache.ltd_systems[system]) == 1:
+                    text += f" {station['name']} ({station['type']}) - {station['distance']} Ls away."
+                else:
+                    text += f"\n> {station['name']} ({station['type']}) - {station['distance']} Ls away."
+            text += '\n'
+
+    await ctx.channel.send(text)
+    await purge_commands(ctx.channel.id)
+
 
 # @bot.event
 # async def on_message(message):
