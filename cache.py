@@ -5,7 +5,7 @@ from datetime import datetime
 from datetime import timedelta
 import numpy as np
 
-import aiohttp
+#import aiohttp
 import pytz
 from dotenv import load_dotenv
 
@@ -88,7 +88,7 @@ class Cache:
     #             station not in self.stations
     #     ):
     #         station_name = station.replace(' ', '%20')
-    #         async with aiohttp.ClientSession() as session:
+    #         async with aiohttp.ClientSession() as session:                                                     #if this gets uncommented at some point please rewrite this to use api_requests.py instead
     #             async with session.get(f"{edbgs_uri}stations?name={station_name}") as station_json:
     #                 station_json_data = json.loads(await station_json.text())
     #                 if DEBUG:
@@ -211,30 +211,26 @@ class Cache:
                         system['conflicts'][0]['status'] == ''
                 ):
                     opponent_name = system['conflicts'][0]['opponent_name']
+                    opp_faction_json_data = await api_requests.edbgs_faction(opponent_name)
+                    for opp_system in opp_faction_json_data['docs'][0]['faction_presence']:
+                        if opp_system['conflicts']:
+                            if opp_system['conflicts'][0]['opponent_name_lower'] == FACTION_NAME:
+                                days_won = system['conflicts'][0]['days_won']
+                                opp_days_won = opp_system['conflicts'][0]['days_won']
 
-                    async with aiohttp.ClientSession() as session:
-                        async with session.get(f"{edbgs_uri}factions?name={opponent_name}") as opp_faction_json:
-                            opp_faction_json_data = json.loads(await opp_faction_json.text())
+                                if days_won > opp_days_won:
+                                    status = 'victory'
+                                    stake = system['conflicts'][0]['stake']
+                                else:
+                                    status = 'defeat'
+                                    stake = opp_system['conflicts'][0]['stake']
 
-                            for opp_system in opp_faction_json_data['docs'][0]['faction_presence']:
-                                if opp_system['conflicts']:
-                                    if opp_system['conflicts'][0]['opponent_name_lower'] == FACTION_NAME:
-                                        days_won = system['conflicts'][0]['days_won']
-                                        opp_days_won = opp_system['conflicts'][0]['days_won']
-
-                                        if days_won > opp_days_won:
-                                            status = 'victory'
-                                            stake = system['conflicts'][0]['stake']
-                                        else:
-                                            status = 'defeat'
-                                            stake = opp_system['conflicts'][0]['stake']
-
-                                        report[system['system_name']] = {
-                                            'state': system['conflicts'][0]['type'],
-                                            'status': status,
-                                            'stake': stake,
-                                            'updated_ago': updated_ago_text(system['updated_at'])
-                                        }
+                                report[system['system_name']] = {
+                                    'state': system['conflicts'][0]['type'],
+                                    'status': status,
+                                    'stake': stake,
+                                    'updated_ago': updated_ago_text(system['updated_at'])
+                                }
         if DEBUG:
             print('Cached conflicts_recovering:', report)
         return report
