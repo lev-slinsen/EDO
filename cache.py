@@ -234,28 +234,18 @@ class Cache:
                                 for state in system['states']:
                                     if state['name_lower'] == 'investment' or state['name_lower'] == 'boom':
                                         system_name_lower = system['name_lower']
-                                        async with aiohttp.ClientSession() as session:
-                                            async with session.get(
-                                                    f"{edbgs_uri}systems?name={system_name_lower}") \
-                                                    as system_json:
-                                                system_json_data = json.loads(await system_json.text())['docs'][
-                                                    0]
-                                                systems_list[system_json_data['name']] = []
-                                                async with aiohttp.ClientSession() as session:
-                                                    async with session.get(
-                                                            f"{edbgs_uri}stations?system={system_json_data['name']}") as stations_json:
-                                                        stations_json_data = json.loads(await stations_json.text())[
-                                                            'docs']
-                                                        for station in stations_json_data:
-                                                            if station['controlling_minor_faction'] == system['controlling_minor_faction']:
-                                                                systems_list[system_json_data['name']].append(
-                                                                    {
-                                                                        'name': station['name'],
-                                                                        'distance': int(
-                                                                            station['distance_from_star']),
-                                                                        'type': station['type']
-                                                                    }
-                                                                )
+                                        system_json_data = await api_requests.eddb_system(system_name_lower)
+                                        systems_list[system_json_data['name']] = []
+                                        stations_json_data = await api_requests.eddb_station(system_json_data)
+                                        for station in stations_json_data:
+                                            if station['controlling_minor_faction'] == system['controlling_minor_faction']:
+                                                systems_list[system_json_data['name']].append(
+                                                    {
+                                                        'name': station['name'],
+                                                        'distance': int(station['distance_from_star']),
+                                                        'type': station['type']
+                                                    }
+                                                )
         if pages > 1:
             for page, x in enumerate(range(1, pages)):
                 page += 1
@@ -269,26 +259,18 @@ class Cache:
                                         for state in system['states']:
                                             if state['name_lower'] == 'investment' or state['name_lower'] == 'boom':
                                                 system_name_lower = system['name_lower']
-                                                async with aiohttp.ClientSession() as session:
-                                                    async with session.get(
-                                                            f"{edbgs_uri}systems?name={system_name_lower}") \
-                                                            as system_json:
-                                                        system_json_data = json.loads(await system_json.text())['docs'][
-                                                            0]
-                                                        systems_list[system_json_data['name']] = []
-                                                        async with aiohttp.ClientSession() as session:
-                                                            async with session.get(
-                                                                    f"{edbgs_uri}stations?system={system_json_data['name']}") as stations_json:
-                                                                stations_json_data = json.loads(await stations_json.text())['docs']
-                                                                for station in stations_json_data:
-                                                                    if station['controlling_minor_faction'] == system['controlling_minor_faction']:
-                                                                        systems_list[system_json_data['name']].append(
-                                                                            {
-                                                                                'name': station['name'],
-                                                                                'distance': int(station['distance_from_star']),
-                                                                                'type': station['type']
-                                                                            }
-                                                                        )
+                                                system_json_data = await api_requests.eddb_system(system_name_lower)
+                                                systems_list[system_json_data['name']] = []
+                                                stations_json_data = await api_requests.eddb_station(system_json_data)
+                                                for station in stations_json_data:
+                                                    if station['controlling_minor_faction'] == system['controlling_minor_faction']:
+                                                        systems_list[system_json_data['name']].append(
+                                                            {
+                                                                'name': station['name'],
+                                                                'distance': int(station['distance_from_star']),
+                                                                'type': station['type']
+                                                            }
+                                                        )
         if DEBUG:
             print(f'Cached ltd_systems: {systems_list}')
 

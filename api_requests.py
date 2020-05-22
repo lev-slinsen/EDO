@@ -71,3 +71,20 @@ async def eddb_publicHolidaySystems_all() :
         print(f'eddb_publicHolidaySystems_all reply: {ph_system_json_data}' )
     return(ph_system_json_data, pages)
 
+async def eddb_system(system_name_lower) :
+    async with aiohttp.ClientSession() as session:
+        async with session.get(f"{edbgs_uri}systems?name={system_name_lower}") as system_json:
+            system_json_data = json.loads(await system_json.text())['docs'][0]
+    if DEBUG :
+        print(f'eddb_system reply: {system_json_data}' )
+    return system_json_data
+
+
+async def eddb_station(system_json_data) :
+    async with aiohttp.ClientSession() as session:
+        async with session.get(f"{edbgs_uri}stations?system={system_json_data['name']}") as stations_json:
+            stations_json_data = json.loads(await stations_json.text())['docs']
+    if DEBUG :
+        print(f'eddb_station reply: {stations_json_data}' )
+    return stations_json_data
+
