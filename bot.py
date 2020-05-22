@@ -10,7 +10,6 @@ from dotenv import load_dotenv
 
 from cache import Cache
 
-# TODO: check for number of symbols in report (max 2000)
 # TODO: refactor LTD systems command
 # TODO: add logging
 # TODO: add reaction mechanics
@@ -116,29 +115,31 @@ class AutoReport:
         if DEBUG:
             print('report_send start')
 
-        report = f'Current objectives for {os.getenv("FACTION_NAME")}:\n\n'
-
+        reports = []
+        
         if self.comment:
-            report += f'{self.comment}\n\n'
+            reports.append(f'Current objectives for {os.getenv("FACTION_NAME")}:\n\n' + f'{self.comment}\n\n')
+        else :
+            reports.append(f'Current objectives for {os.getenv("FACTION_NAME")}:\n\n')
 
         for num, objective_active in enumerate(self.objectives):
             objective = self.objectives[objective_active]
             if objective.status == 'active' and objective.state == 'retreat' :
                 if DEBUG :
                     print(f'retreating_systems_text for {objective_active} start')
-                report += await objective.retreating_systems_text(num+1, objective_active)
+                reports.append( await objective.retreating_systems_text(num+1, objective_active) )
                 if DEBUG :
                     print(f'retreating_systems_text for {objective_active} done')
             elif objective.status == 'active':
                 if DEBUG:
                     print(f'conflict_active_text for {objective_active} start')
-                report += await objective.conflict_active_text(num + 1, objective_active)
+                reports.append( await objective.conflict_active_text(num + 1, objective_active) )
                 if DEBUG:
                     print(f'conflict_active_text for {objective_active} done')
             elif objective.status == 'event':
                 if DEBUG:
                     print(f'conflict_active_text for event #{num + 1} start')
-                report += f'{number_emoji[num + 1]} {objective.text}\n\n'
+                reports.append( f'{number_emoji[num + 1]} {objective.text}\n\n' )
                 if DEBUG:
                     print(f'conflict_active_text for event #{num + 1} done')
 
@@ -147,13 +148,13 @@ class AutoReport:
             if objective.status == 'pending' and objective.state=='retreat' :
                 if DEBUG :
                     print(f'retreating_systems_text for {objective_pending} start')
-                report += await objective.retreating_systems_text(num+1, objective_pending)
+                reports.append( await objective.retreating_systems_text(num+1, objective_pending) )
                 if DEBUG :
                     print(f'retreating_systems_text for {objective_pending} done')
             elif objective.status == 'pending':
                 if DEBUG:
                     print(f'conflict_pending_text for {objective_pending} start')
-                report += await objective.conflict_pending_text(objective_pending)
+                reports.append( await objective.conflict_pending_text(objective_pending) )
                 if DEBUG:
                     print(f'conflict_pending_text for {objective_pending} done')
 
@@ -162,19 +163,21 @@ class AutoReport:
             if objective.status=="recovering" and objective.state=="retreat" :
                 if DEBUG :
                     print(f'retreating_systems_text for {objective_recovering} start')
-                report += await objective.retreating_systems_text(num+1, objective_recovering)
+                reports.append( await objective.retreating_systems_text(num+1, objective_recovering) )
                 if DEBUG :
                     print(f'retreating_systems_text for {objective_recovering} done')
             elif objective.status == 'victory' or objective.status == 'defeat':
                 if DEBUG:
                     print(f'conflict_recovering_text for {objective_recovering} start')
-                report += await objective.conflict_recovering_text(objective_recovering)
+                reports.append( await objective.conflict_recovering_text(objective_recovering) )
                 if DEBUG:
                     print(f'conflict_recovering_text for {objective_recovering} done')
 
-        report += await self.unvisited_systems(self.cache.unvisited_systems)
+        reports.append( await self.unvisited_systems(self.cache.unvisited_systems) )
 
-        await bot.get_channel(CHANNEL_ADMIN).send(report)
+        for report in reports :
+            await bot.get_channel(CHANNEL_ADMIN).send(report)
+            
         if DEBUG:
             print('report_send done')
 
