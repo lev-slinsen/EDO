@@ -3,6 +3,7 @@ import json
 import os
 from datetime import datetime
 from datetime import timedelta
+import numpy as np
 
 import aiohttp
 import pytz
@@ -19,6 +20,13 @@ eddb_uri = 'https://eddbapi.kodeblox.com/api/v4/'
 frontier_tz = pytz.timezone('UTC')
 frontier_time = datetime.now(frontier_tz)
 
+
+def distanceFromKp(inList) : #inList in format of [x,y,z] all as int #This will be used later as part of the get_ltd_systems function.
+    p1 = np.array(inList)
+    p2 = np.array([12.46875, -66.71875, -22.90625])
+    squared_dist = np.sum((p1-p2)**2, axis=0)
+    dist = np.sqrt(squared_dist)
+    return(dist)
 
 def updated_ago_text(updated_at_data):
     updated_at = frontier_tz.localize(datetime.strptime(updated_at_data[0:16], '%Y-%m-%dT%H:%M'))
@@ -59,6 +67,7 @@ class Cache:
         self.faction_data = await self.faction_update()
         if self.faction_data['error'] != 0:
             return
+        self.retreating_systems = await self.get_retreating_systems(self.faction_data)
         self.conflicts_active = await self.get_conflicts_active(self.faction_data)
         self.conflicts_pending = await self.get_conflicts_pending(self.faction_data)
         self.conflicts_recovering = await self.get_conflicts_recovering(self.faction_data)
@@ -107,6 +116,33 @@ class Cache:
     #                         self.stations[station] = f'**Unknown type**'
         #     text = f'{station} ({self.stations[station]})'
         # return text
+
+    async def get_retreating_systems(self, faction_data) :
+        report = {}
+        for system in faction_data['docs'][0]['faction_presence']:
+            if system['state']=="retreat" : #not sure what the exact word is for retrea, just taking a guess on this
+                report[system['system_name']] = {
+                    'updated_ago': await updated_ago_text(system['updated_at']),
+                    'status':'active',
+                    'influence': system["influence"]
+                }
+            for pendingState in system["pending_states"] :
+                if pendingState["state"]=="retreat" : #same as above
+                    report[system['system_name']] = {
+                        'updated_ago': await updated_ago_text(system['updated_at']),
+                        'status':'pending',
+                        'influence':system["influence"]
+                    }
+            for recoveringState in system["recovering_states"] :
+                if recoveringState["state"]=="retreat" : #same as above
+                    report[system['system_name']] = {
+                        'updated_ago': await updated_ago_text(system['updated_at']),
+                        'status':'recovering',
+                        'influence':system["influence"]
+                    }
+        if DEBUG :
+            print('Cached retreating_systems ', report)
+        return report
 
     async def get_conflicts_active(self, faction_data):
         report = {}
