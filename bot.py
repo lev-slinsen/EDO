@@ -1,16 +1,14 @@
-import asyncio
 import os
-import string
 from collections import OrderedDict
 from datetime import datetime
 
-import pytz
 import discord
+import pytz
 from discord.ext import commands
 from discord.ext import tasks
 from dotenv import load_dotenv
 
-from eddb_api import Cache
+from cache import Cache
 
 # TODO: check for number of symbols in report (max 2000)
 # TODO: refactor LTD systems command
@@ -117,9 +115,12 @@ class AutoReport:
     async def report_send(self):
         if DEBUG:
             print('report_send start')
+
         report = f'Current objectives for {os.getenv("FACTION_NAME")}:\n\n'
+
         if self.comment:
             report += f'{self.comment}\n\n'
+
         for num, objective_active in enumerate(self.objectives):
             objective = self.objectives[objective_active]
             if objective.status == 'active':
@@ -134,6 +135,7 @@ class AutoReport:
                 report += f'{number_emoji[num + 1]} {objective.text}\n\n'
                 if DEBUG:
                     print(f'conflict_active_text for event #{num + 1} done')
+
         for objective_pending in self.objectives:
             objective = self.objectives[objective_pending]
             if objective.status == 'pending':
@@ -142,15 +144,18 @@ class AutoReport:
                 report += await objective.conflict_pending_text(objective_pending)
                 if DEBUG:
                     print(f'conflict_pending_text for {objective_pending} done')
+
         for objective_recovering in self.objectives:
             objective = self.objectives[objective_recovering]
-            if objective.status == 'victory' or objective.status == 'defeat':
+            if objective.status in ('victory', 'defeat'):
                 if DEBUG:
                     print(f'conflict_recovering_text for {objective_recovering} start')
                 report += await objective.conflict_recovering_text(objective_recovering)
                 if DEBUG:
                     print(f'conflict_recovering_text for {objective_recovering} done')
+
         report += await self.unvisited_systems(self.cache.unvisited_systems)
+
         await bot.get_channel(CHANNEL_ADMIN).send(report)
         if DEBUG:
             print('report_send done')
@@ -251,7 +256,7 @@ class AutoReport:
                 text += ', '.join(unvisited_systems[day])
                 text += '\n'
         if lines == 1:
-            return
+            return ''
         elif lines == 2:
             text = text.replace(':\n', ' ')
         return text
@@ -445,23 +450,23 @@ async def order(ctx, arg):
     await purge_commands(CHANNEL_ADMIN)
 
 
-@bot.command(name='ltd')
-async def ltd(ctx):
-    if len(auto_report.cache.ltd_systems) == 0:
-        text = '`No suitable systems at this moment`'
-    else:
-        text = 'Best places to sell your :gem:\n'
-        for system in auto_report.cache.ltd_systems:
-            text += f'**{system}**:'
-            for station in auto_report.cache.ltd_systems[system]:
-                if len(auto_report.cache.ltd_systems[system]) == 1:
-                    text += f" {station['name']} ({station['type']}) - {station['distance']} Ls away."
-                else:
-                    text += f"\n> {station['name']} ({station['type']}) - {station['distance']} Ls away."
-            text += '\n'
-
-    await ctx.channel.send(text)
-    await purge_commands(ctx.channel.id)
+# @bot.command(name='ltd')
+# async def ltd(ctx):
+#     if len(auto_report.cache.ltd_systems) == 0:
+#         text = '`No suitable systems at this moment`'
+#     else:
+#         text = 'Best places to sell your :gem:\n'
+#         for system in auto_report.cache.ltd_systems:
+#             text += f'**{system}**:'
+#             for station in auto_report.cache.ltd_systems[system]:
+#                 if len(auto_report.cache.ltd_systems[system]) == 1:
+#                     text += f" {station['name']} ({station['type']}) - {station['distance']} Ls away."
+#                 else:
+#                     text += f"\n> {station['name']} ({station['type']}) - {station['distance']} Ls away."
+#             text += '\n'
+#
+#     await ctx.channel.send(text)
+#     await purge_commands(ctx.channel.id)
 
 
 # @bot.event
