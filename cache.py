@@ -21,9 +21,9 @@ frontier_tz = pytz.timezone('UTC')
 frontier_time = datetime.now(frontier_tz)
 
 
-def distanceFromKp(inList) : #inList in format of [x,y,z] all as int #This will be used later as part of the get_ltd_systems function.
-    p1 = np.array(inList)
-    p2 = np.array([12.46875, -66.71875, -22.90625])
+def distanceFrom(inList1, inList2) : #inList in format of [x,y,z] all as int
+    p1 = np.array(inList1)
+    p2 = np.array(inList2)
     squared_dist = np.sum((p1-p2)**2, axis=0)
     dist = np.sqrt(squared_dist)
     return(dist)
@@ -275,6 +275,7 @@ class Cache:
                                                     {
                                                         'name': station['name'],
                                                         'distance': int(station['distance_from_star']),
+                                                        'distFromBoran': distanceFrom([system["x"], system["y"], system["z"]], [123.03125, -0.25, 2.84375])
                                                         'type': station['type']
                                                     }
                                                 )
@@ -300,6 +301,7 @@ class Cache:
                                                             {
                                                                 'name': station['name'],
                                                                 'distance': int(station['distance_from_star']),
+                                                                'distFromBoran': distanceFrom([system["x"], system["y"], system["z"]], [123.03125, -0.25, 2.84375])
                                                                 'type': station['type']
                                                             }
                                                         )

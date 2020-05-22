@@ -501,9 +501,9 @@ async def order(ctx, arg):
 #             text += f'**{system}**:'
 #             for station in auto_report.cache.ltd_systems[system]:
 #                 if len(auto_report.cache.ltd_systems[system]) == 1:
-#                     text += f" {station['name']} ({station['type']}) - {station['distance']} Ls away."
+#                     text += f" {station['name']} ({station['type']}) - {station['distance']} Ls, {station['distFromBoran']} Lys from Borann."
 #                 else:
-#                     text += f"\n> {station['name']} ({station['type']}) - {station['distance']} Ls away."
+#                     text += f"\n> {station['name']} ({station['type']}) - {station['distance']} Ls, {station['distFromBoran']} Lys from Borann."
 #             text += '\n'
 #
 #     await ctx.channel.send(text)
