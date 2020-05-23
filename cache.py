@@ -10,9 +10,11 @@ import pytz
 from dotenv import load_dotenv
 
 import api_requests
+from log import logEvent
 
 load_dotenv()
 DEBUG = os.getenv('DEBUG')
+LOG = os.getenv('LOG')
 FACTION_NAME = os.getenv('FACTION_NAME').lower()
 
 edbgs_uri = 'https://elitebgs.app/api/ebgs/v4/'
@@ -64,7 +66,7 @@ class Cache:
         self.stations = {}
 
     async def gather_data(self):
-        self.faction_data = await self.faction_update()
+        self.faction_data = await api_requests.edbgs_faction(FACTION_NAME)
         if self.faction_data['error'] != 0:
             return
         self.retreating_systems = await self.get_retreating_systems(self.faction_data)
@@ -74,12 +76,8 @@ class Cache:
         self.unvisited_systems = await self.get_unvisited_systems(self.faction_data)
         # self.ltd_systems = await self.get_ltd_systems()
 
-        if DEBUG:
-            print('Cache init done')
-
-    async def faction_update(self):
-        data = await api_requests.edbgs_faction(FACTION_NAME)
-        return data
+        if DEBUG: print('Cache init done')
+        if LOG: await logEvent("Cache init done","")
 
     # async def stake_text(self, station):
     #     text = ''
@@ -93,6 +91,7 @@ class Cache:
     #                 station_json_data = json.loads(await station_json.text())
     #                 if DEBUG:
     #                     print(f'  > Station data: {station_json_data}')
+    #                 #if this is reintegrated, add logEvent() here
     #                 if station_json_data['total'] == 0:
     #                     self.stations[station] = 'Settlement'
     #                 else:
@@ -140,8 +139,8 @@ class Cache:
                         'status':'recovering',
                         'influence':system["influence"]
                     }
-        if DEBUG :
-            print('Cached retreating_systems ', report)
+        if DEBUG : print('Cached retreating_systems ', report)
+        if LOG: await logEvent("Cached retreating_systems","") #excluding details for now for simplicity, maybe add later?
         return report
 
     async def get_conflicts_active(self, faction_data):
@@ -178,8 +177,8 @@ class Cache:
                                 'loss': conflict[us]['stake'],
                                 'updated_ago': updated_ago_text(system['updated_at'])
                             }
-        if DEBUG:
-            print('Cached conflicts_active:', report)
+        if DEBUG: print('Cached conflicts_active:', report)
+        if LOG: await logEvent("Cached conflicts_active","")
         return report
 
     async def get_conflicts_pending(self, faction_data):
@@ -231,8 +230,8 @@ class Cache:
                                     'stake': stake,
                                     'updated_ago': updated_ago_text(system['updated_at'])
                                 }
-        if DEBUG:
-            print('Cached conflicts_recovering:', report)
+        if DEBUG: print('Cached conflicts_recovering:', report)
+        if LOG: await logEvent("Cached conflicts_recovering","")
         return report
 
     async def get_unvisited_systems(self, faction_data):
@@ -250,8 +249,8 @@ class Cache:
                         report[day].append(system['system_name'])
                 if updated_ago >= timedelta(days=7):
                     report[7].append(system['system_name'])
-        if DEBUG:
-            print('Cached unvisited_systems:', report)
+        if DEBUG: print('Cached unvisited_systems:', report)
+        if LOG: await logEvent("Cached unvisited_systems","")
         return report
 
     async def get_ltd_systems(self):
@@ -275,7 +274,7 @@ class Cache:
                                                     {
                                                         'name': station['name'],
                                                         'distance': int(station['distance_from_star']),
-                                                        'distFromBoran': distanceFrom([system["x"], system["y"], system["z"]], [123.03125, -0.25, 2.84375])
+                                                        'distFromBoran': distanceFrom([system["x"], system["y"], system["z"]], [123.03125, -0.25, 2.84375]),
                                                         'type': station['type']
                                                     }
                                                 )
@@ -301,11 +300,10 @@ class Cache:
                                                             {
                                                                 'name': station['name'],
                                                                 'distance': int(station['distance_from_star']),
-                                                                'distFromBoran': distanceFrom([system["x"], system["y"], system["z"]], [123.03125, -0.25, 2.84375])
+                                                                'distFromBoran': distanceFrom([system["x"], system["y"], system["z"]], [123.03125, -0.25, 2.84375]),
                                                                 'type': station['type']
                                                             }
                                                         )
-        if DEBUG:
-            print(f'Cached ltd_systems: {systems_list}')
-
+        if DEBUG: print(f'Cached ltd_systems: {systems_list}')
+        if LOG: await logEvent("Cached ltd_systems",f"{systems_list}")
         return systems_list

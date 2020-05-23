@@ -9,15 +9,16 @@ from discord.ext import tasks
 from dotenv import load_dotenv
 
 from cache import Cache
+from log import initLog, logEvent
 
 # TODO: refactor LTD systems command
-# TODO: add logging
 # TODO: add reaction mechanics
 # TODO: add links to systems and stations on EDDB or Inara
 
 load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
 DEBUG = os.getenv('DEBUG')
+LOG = os.getenv('LOG')
 CHANNEL_ADMIN = int(os.getenv('CHANNEL_ADMIN'))
 ADMIN_ROLE = os.getenv('ADMIN_ROLE')
 
@@ -83,11 +84,12 @@ class AutoReport:
         self.objectives = OrderedDict()
         self.comment = ''
         self.report_message_id = 0
+        await initLog() #start the log file
 
     @tasks.loop(minutes=30)
     async def report_loop(self):
-        if DEBUG:
-            print(f'{frontier_time}: report_loop start')
+        if DEBUG: print(f'{frontier_time}: report_loop start')
+        if LOG : await logEvent("report_loop start","")
         await bot.get_channel(CHANNEL_ADMIN).send(f'`Updating report...`')
         self.cache = Cache()
         await self.cache.gather_data()
@@ -98,22 +100,22 @@ class AutoReport:
         await purge_own_messages(CHANNEL_ADMIN)
         await self.report_send()
         await purge_commands(CHANNEL_ADMIN)
-        if DEBUG:
-            print('report_loop done\n')
+        if DEBUG: print('report_loop done\n')
+        if LOG: await logEvent("report_loop done","")
 
     async def objectives_collect(self):
-        if DEBUG:
-            print('objective_collect start')
+        if DEBUG: print('objective_collect start')
+        if LOG: await logEvent("objective_collect start","")
         await self.report_retreating(self.cache.retreating_systems)
         await self.report_active(self.cache.conflicts_active)
         await self.report_pending(self.cache.conflicts_pending)
         await self.report_recovering(self.cache.conflicts_recovering)
-        if DEBUG:
-            print('objective_collect done')
+        if DEBUG: print('objective_collect done')
+        if LOG: await logEvent("objective_collect done","")
 
     async def report_send(self):
-        if DEBUG:
-            print('report_send start')
+        if DEBUG: print('report_send start')
+        if LOG: await logEvent("report_send start","")
 
         reports = []
         
@@ -125,65 +127,65 @@ class AutoReport:
         for num, objective_active in enumerate(self.objectives):
             objective = self.objectives[objective_active]
             if objective.status == 'active' and objective.state == 'retreat' :
-                if DEBUG :
-                    print(f'retreating_systems_text for {objective_active} start')
+                if DEBUG : print(f'retreating_systems_text for {objective_active} start')
+                if LOG: await logEvent("retreating_systems_text start",f"{objective_active}")
                 reports.append( await objective.retreating_systems_text(num+1, objective_active) )
-                if DEBUG :
-                    print(f'retreating_systems_text for {objective_active} done')
+                if DEBUG : print(f'retreating_systems_text for {objective_active} done')
+                if LOG : await logEvent("retreating_systems_text done",f"{objective_active}")
             elif objective.status == 'active':
-                if DEBUG:
-                    print(f'conflict_active_text for {objective_active} start')
+                if DEBUG: print(f'conflict_active_text for {objective_active} start')
+                if LOG: await logEvent("conflict_active_text start",f"{objective_active}")
                 reports.append( await objective.conflict_active_text(num + 1, objective_active) )
-                if DEBUG:
-                    print(f'conflict_active_text for {objective_active} done')
+                if DEBUG: print(f'conflict_active_text for {objective_active} done')
+                if LOG: await logEvent("conflict_active_text done",f"{objective_active}")
             elif objective.status == 'event':
-                if DEBUG:
-                    print(f'conflict_active_text for event #{num + 1} start')
+                if DEBUG: print(f'conflict_active_text for event #{num + 1} start')
+                if LOG: await logEvent("conflict_active_text start",f"{num+1}")
                 reports.append( f'{number_emoji[num + 1]} {objective.text}\n\n' )
-                if DEBUG:
-                    print(f'conflict_active_text for event #{num + 1} done')
+                if DEBUG: print(f'conflict_active_text for event #{num + 1} done')
+                if LOG: await logEvent("conflict_active_text done",f"{num+1}")
 
         for objective_pending in self.objectives:
             objective = self.objectives[objective_pending]
             if objective.status == 'pending' and objective.state=='retreat' :
-                if DEBUG :
-                    print(f'retreating_systems_text for {objective_pending} start')
+                if DEBUG : print(f'retreating_systems_text for {objective_pending} start')
+                if LOG: await logEvent("retreating_systems_text start",f"{objective_pending}")
                 reports.append( await objective.retreating_systems_text(num+1, objective_pending) )
-                if DEBUG :
-                    print(f'retreating_systems_text for {objective_pending} done')
+                if DEBUG : print(f'retreating_systems_text for {objective_pending} done')
+                if LOG: await logEvent("retreating_systems_text done",f"{objective_pending}")
             elif objective.status == 'pending':
-                if DEBUG:
-                    print(f'conflict_pending_text for {objective_pending} start')
+                if DEBUG: print(f'conflict_pending_text for {objective_pending} start')
+                if LOG: await logEvent("conflict_pending_text start",f"{objective_pending}")
                 reports.append( await objective.conflict_pending_text(objective_pending) )
-                if DEBUG:
-                    print(f'conflict_pending_text for {objective_pending} done')
+                if DEBUG: print(f'conflict_pending_text for {objective_pending} done')
+                if LOG: await logEvent("conflict_pending_text done",f"{objective_pending}")
 
         for objective_recovering in self.objectives:
             objective = self.objectives[objective_recovering]
             if objective.status=="recovering" and objective.state=="retreat" :
-                if DEBUG :
-                    print(f'retreating_systems_text for {objective_recovering} start')
+                if DEBUG : print(f'retreating_systems_text for {objective_recovering} start')
+                if LOG : await logEvent("retreating_systems_text start",f"{objective_recovering}")
                 reports.append( await objective.retreating_systems_text(num+1, objective_recovering) )
-                if DEBUG :
-                    print(f'retreating_systems_text for {objective_recovering} done')
+                if DEBUG : print(f'retreating_systems_text for {objective_recovering} done')
+                if LOG : await logEvent("retreating_systems_text done",f"{objective_recovering}")
             elif objective.status == 'victory' or objective.status == 'defeat':
-                if DEBUG:
-                    print(f'conflict_recovering_text for {objective_recovering} start')
+                if DEBUG: print(f'conflict_recovering_text for {objective_recovering} start')
+                if LOG: await logEvent("conflict_recovering_text start",f"{objective_recovering}")
                 reports.append( await objective.conflict_recovering_text(objective_recovering) )
-                if DEBUG:
-                    print(f'conflict_recovering_text for {objective_recovering} done')
+                if DEBUG: print(f'conflict_recovering_text for {objective_recovering} done')
+                if LOG: await logEvent("conflict_recovering_text done",f"{objective_recovering}")
 
         reports.append( await self.unvisited_systems(self.cache.unvisited_systems) )
 
         for report in reports :
             await bot.get_channel(CHANNEL_ADMIN).send(report)
-            
-        if DEBUG:
-            print('report_send done')
+
+        if DEBUG: print('report_send done')
+        if LOG: await logEvent("report_send done","")
 
     async def report_retreating(self, retreating_systems) : #retreating_systems is my report from cache
-        if DEBUG :
-            print('report_retreating start')
+        if DEBUG : print('report_retreating start')
+        if LOG : await logEvent("report_retreating start","")
         for old_objective in self.objectives :
             if ( old_objective not in retreating_systems ): #if the old objective matches one of the ones that exists now
                 self.objectives.pop(old_objective) #remove it
@@ -195,12 +197,12 @@ class AutoReport:
                 objective.state = 'retreat'
                 objective.influence = retreating_systems[retreating_system]["influence"]
                 objective.updated_ago = retreating_systems[retreating_system]["updated_ago"]
-        if DEBUG :
-            print('report_retresting done')
+        if DEBUG : print('report_retresting done')
+        if LOG : await logEvent("report_retreating done","")
 
     async def report_active(self, conflicts_active):
-        if DEBUG:
-            print('report_active start')
+        if DEBUG: print('report_active start')
+        if LOG : await logEvent("report_active start","")
         for old_objective in self.objectives:
             if self.objectives[old_objective].status == 'active' and old_objective not in conflicts_active:
                 self.objectives.pop(old_objective)
@@ -230,12 +232,12 @@ class AutoReport:
                 objective.score_us = conflicts_active[conflict]['score_us']
                 objective.score_them = conflicts_active[conflict]['score_them']
                 objective.updated_ago = conflicts_active[conflict]['updated_ago']
-        if DEBUG:
-            print('report_active done')
+        if DEBUG: print('report_active done')
+        if LOG : await logEvent("report_active done","")
 
     async def report_pending(self, conflicts_pending):
-        if DEBUG:
-            print('report_pending start')
+        if DEBUG: print('report_pending start')
+        if LOG : await logEvent("report_pending start","")
         for old_objective in self.objectives:
             if self.objectives[old_objective].status == 'pending' and old_objective not in conflicts_pending:
                 self.objectives.pop(old_objective)
@@ -252,12 +254,12 @@ class AutoReport:
             else:
                 objective = self.objectives[conflict]
                 objective.updated_ago = conflicts_pending[conflict]['updated_ago']
-        if DEBUG:
-            print('report_pending done')
+        if DEBUG: print('report_pending done')
+        if LOG : await logEvent("report_pending done","")
 
     async def report_recovering(self, conflicts_recovering):
-        if DEBUG:
-            print('report_recovering start')
+        if DEBUG: print('report_recovering start')
+        if LOG : await logEvent("report_recovering start","")
         for old_objective in self.objectives:
             if (
                     (self.objectives[old_objective].status == 'defeat' or
@@ -276,8 +278,8 @@ class AutoReport:
             else:
                 objective = self.objectives[conflict]
                 objective.updated_ago = conflicts_recovering[conflict]['updated_ago']
-        if DEBUG:
-            print('report_recovering done')
+        if DEBUG: print('report_recovering done')
+        if LOG : await logEvent("report_recovering done","")
 
     async def unvisited_systems(self, unvisited_systems):
         text = 'Systems unchecked for:\n'
