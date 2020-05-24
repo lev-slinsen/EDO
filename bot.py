@@ -9,7 +9,7 @@ from discord.ext import tasks
 from dotenv import load_dotenv
 
 from cache import Cache
-from log import initLog, logEvent
+from log import logEvent
 
 # TODO: refactor LTD systems command
 # TODO: add reaction mechanics
@@ -84,7 +84,7 @@ class AutoReport:
         self.objectives = OrderedDict()
         self.comment = ''
         self.report_message_id = 0
-        await initLog() #start the log file
+        await logEvent("AutoReport Init","") #start the log file
 
     @tasks.loop(minutes=30)
     async def report_loop(self):
