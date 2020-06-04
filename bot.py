@@ -11,7 +11,6 @@ from dotenv import load_dotenv
 from cache import Cache
 
 # TODO: check for number of symbols in report (max 2000)
-# TODO: refactor LTD systems command
 # TODO: add logging
 # TODO: add reaction mechanics
 # TODO: add links to systems and stations on EDDB or Inara
@@ -450,23 +449,18 @@ async def order(ctx, arg):
     await purge_commands(CHANNEL_ADMIN)
 
 
-# @bot.command(name='ltd')
-# async def ltd(ctx):
-#     if len(auto_report.cache.ltd_systems) == 0:
-#         text = '`No suitable systems at this moment`'
-#     else:
-#         text = 'Best places to sell your :gem:\n'
-#         for system in auto_report.cache.ltd_systems:
-#             text += f'**{system}**:'
-#             for station in auto_report.cache.ltd_systems[system]:
-#                 if len(auto_report.cache.ltd_systems[system]) == 1:
-#                     text += f" {station['name']} ({station['type']}) - {station['distance']} Ls away."
-#                 else:
-#                     text += f"\n> {station['name']} ({station['type']}) - {station['distance']} Ls away."
-#             text += '\n'
-#
-#     await ctx.channel.send(text)
-#     await purge_commands(ctx.channel.id)
+@bot.command(name='ltd')
+async def ltd(ctx):
+    if len(auto_report.cache.ltd_systems) == 0:
+        text = '`No suitable systems at this moment`'
+    else:
+        text = 'Best places to sell your :gem:\n'
+        for system in auto_report.cache.ltd_systems:
+            system_data = auto_report.cache.ltd_systems[system]
+            text += f"**{system}**: distance from HQ is {system_data['distance']}, last updated {system_data['updated_ago']}\n"
+
+    await ctx.channel.send(text)
+    await purge_commands(ctx.channel.id)
 
 
 # @bot.event

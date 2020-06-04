@@ -51,3 +51,27 @@ async def edbgs_system(system):
                 print(f'edbgs_system for "{system}" reply: {system_json_data}')
 
             return system_json_data['docs'][0]
+
+
+async def eddb_pop_systems(state):
+    state_uri = state.replace(' ', '%20')
+    async with aiohttp.ClientSession() as session:
+        async with session.get(f"{eddb_uri}populatedsystems?statenames={state_uri}") as system_json:
+            pages = json.loads(await system_json.text())['pages']
+            system_json_data = json.loads(await system_json.text())
+            if pages > 1:
+                for page in range(2, pages+1):
+                    async with aiohttp.ClientSession() as session:
+                        async with session.get(f"{eddb_uri}populatedsystems?statenames={state_uri}&page={page}") as system_json:
+                            system_json_data_page = json.loads(await system_json.text())
+                            for system in system_json_data_page['docs']:
+                                system_json_data['docs'].append(system)
+
+                if DEBUG:
+                    print(f'eddb_pop_systems for "{state}" reply: {system_json_data}')
+
+                return system_json_data['docs']
+
+
+
+

@@ -7,6 +7,7 @@ from datetime import timedelta
 import aiohttp
 import pytz
 from dotenv import load_dotenv
+import numpy as np
 
 import api_requests
 
@@ -20,7 +21,7 @@ frontier_tz = pytz.timezone('UTC')
 frontier_time = datetime.now(frontier_tz)
 
 
-def updated_ago_text(updated_at_data):
+async def updated_ago_text(updated_at_data):
     updated_at = frontier_tz.localize(datetime.strptime(updated_at_data[0:16], '%Y-%m-%dT%H:%M'))
     highlight = False
     updated_ago = (frontier_time - updated_at)
@@ -63,13 +64,15 @@ class Cache:
         self.conflicts_pending = await self.get_conflicts_pending(self.faction_data)
         self.conflicts_recovering = await self.get_conflicts_recovering(self.faction_data)
         self.unvisited_systems = await self.get_unvisited_systems(self.faction_data)
-        # self.ltd_systems = await self.get_ltd_systems()
+        self.ltd_systems = await self.get_ltd_systems()
 
         if DEBUG:
             print('Cache init done')
 
     async def faction_update(self):
         data = await api_requests.edbgs_faction(FACTION_NAME)
+        home_system_name = data['docs'][0]['faction_presence'][0]['system_name']
+        self.home_system = await api_requests.edbgs_system(home_system_name)
         return data
 
     # async def stake_text(self, station):
@@ -140,7 +143,7 @@ class Cache:
                                 'score_them': conflict[them]['days_won'],
                                 'win': conflict[them]['stake'],
                                 'loss': conflict[us]['stake'],
-                                'updated_ago': updated_ago_text(system['updated_at'])
+                                'updated_ago': await updated_ago_text(system['updated_at'])
                             }
         if DEBUG:
             print('Cached conflicts_active:', report)
@@ -162,7 +165,7 @@ class Cache:
                                     'opponent': system['conflicts'][0]['opponent_name'],
                                     'win': opp_system['conflicts'][0]['stake'],
                                     'loss': system['conflicts'][0]['stake'],
-                                    'updated_ago': updated_ago_text(system['updated_at'])
+                                    'updated_ago': await updated_ago_text(system['updated_at'])
                                 }
         return report
 
@@ -175,30 +178,27 @@ class Cache:
                         system['conflicts'][0]['status'] == ''
                 ):
                     opponent_name = system['conflicts'][0]['opponent_name']
+                    opp_faction_data = await api_requests.edbgs_faction(opponent_name)
 
-                    async with aiohttp.ClientSession() as session:
-                        async with session.get(f"{edbgs_uri}factions?name={opponent_name}") as opp_faction_json:
-                            opp_faction_json_data = json.loads(await opp_faction_json.text())
+                    for opp_system in opp_faction_data['docs'][0]['faction_presence']:
+                        if opp_system['conflicts']:
+                            if opp_system['conflicts'][0]['opponent_name_lower'] == FACTION_NAME:
+                                days_won = system['conflicts'][0]['days_won']
+                                opp_days_won = opp_system['conflicts'][0]['days_won']
 
-                            for opp_system in opp_faction_json_data['docs'][0]['faction_presence']:
-                                if opp_system['conflicts']:
-                                    if opp_system['conflicts'][0]['opponent_name_lower'] == FACTION_NAME:
-                                        days_won = system['conflicts'][0]['days_won']
-                                        opp_days_won = opp_system['conflicts'][0]['days_won']
+                                if days_won > opp_days_won:
+                                    status = 'victory'
+                                    stake = system['conflicts'][0]['stake']
+                                else:
+                                    status = 'defeat'
+                                    stake = opp_system['conflicts'][0]['stake']
 
-                                        if days_won > opp_days_won:
-                                            status = 'victory'
-                                            stake = system['conflicts'][0]['stake']
-                                        else:
-                                            status = 'defeat'
-                                            stake = opp_system['conflicts'][0]['stake']
-
-                                        report[system['system_name']] = {
-                                            'state': system['conflicts'][0]['type'],
-                                            'status': status,
-                                            'stake': stake,
-                                            'updated_ago': updated_ago_text(system['updated_at'])
-                                        }
+                                report[system['system_name']] = {
+                                    'state': system['conflicts'][0]['type'],
+                                    'status': status,
+                                    'stake': stake,
+                                    'updated_ago': await updated_ago_text(system['updated_at'])
+                                }
         if DEBUG:
             print('Cached conflicts_recovering:', report)
         return report
@@ -224,75 +224,30 @@ class Cache:
 
     async def get_ltd_systems(self):
         systems_list = {}
-        async with aiohttp.ClientSession() as session:
-            async with session.get(f"{eddb_uri}populatedsystems?statenames=public%20holiday") as ph_system_json:
-                pages = json.loads(await ph_system_json.text())['pages']
-                ph_system_json_data = json.loads(await ph_system_json.text())
-                for system in ph_system_json_data['docs']:
-                    for state in system['states']:
-                        if state['name_lower'] == 'expansion':
-                            for state in system['states']:
-                                if state['name_lower'] == 'civil liberty':
-                                    for state in system['states']:
-                                        if state['name_lower'] == 'investment' or state['name_lower'] == 'boom':
-                                            system_name_lower = system['name_lower']
-                                            async with aiohttp.ClientSession() as session:
-                                                async with session.get(
-                                                        f"{edbgs_uri}systems?name={system_name_lower}") \
-                                                        as system_json:
-                                                    system_json_data = json.loads(await system_json.text())['docs'][
-                                                        0]
-                                                    systems_list[system_json_data['name']] = []
-                                                    async with aiohttp.ClientSession() as session:
-                                                        async with session.get(
-                                                                f"{edbgs_uri}stations?system={system_json_data['name']}") as stations_json:
-                                                            stations_json_data = json.loads(await stations_json.text())[
-                                                                'docs']
-                                                            for station in stations_json_data:
-                                                                if station['controlling_minor_faction'] == system['controlling_minor_faction']:
-                                                                    systems_list[system_json_data['name']].append(
-                                                                        {
-                                                                            'name': station['name'],
-                                                                            'distance': int(
-                                                                                station['distance_from_star']),
-                                                                            'type': station['type']
-                                                                        }
-                                                                    )
-        if pages > 1:
-            for page, x in enumerate(range(1, pages)):
-                page += 1
-                async with aiohttp.ClientSession() as session:
-                    async with session.get(f"{eddb_uri}populatedsystems?statenames=public%20holiday&page={page+1}") as ph_system_json:
-                        ph_system_json_data = json.loads(await ph_system_json.text())
-                        for system in ph_system_json_data['docs']:
-                            for state in system['states']:
-                                if state['name_lower'] == 'expansion':
-                                    for state in system['states']:
-                                        if state['name_lower'] == 'civil liberty':
-                                            for state in system['states']:
-                                                if state['name_lower'] == 'investment' or state['name_lower'] == 'boom':
-                                                    system_name_lower = system['name_lower']
-                                                    async with aiohttp.ClientSession() as session:
-                                                        async with session.get(
-                                                                f"{edbgs_uri}systems?name={system_name_lower}") \
-                                                                as system_json:
-                                                            system_json_data = json.loads(await system_json.text())['docs'][
-                                                                0]
-                                                            systems_list[system_json_data['name']] = []
-                                                            async with aiohttp.ClientSession() as session:
-                                                                async with session.get(
-                                                                        f"{edbgs_uri}stations?system={system_json_data['name']}") as stations_json:
-                                                                    stations_json_data = json.loads(await stations_json.text())['docs']
-                                                                    for station in stations_json_data:
-                                                                        if station['controlling_minor_faction'] == system['controlling_minor_faction']:
-                                                                            systems_list[system_json_data['name']].append(
-                                                                                {
-                                                                                    'name': station['name'],
-                                                                                    'distance': int(station['distance_from_star']),
-                                                                                    'type': station['type']
-                                                                                }
-                                                                            )
-        if DEBUG:
-            print(f'Cached ltd_systems: {systems_list}')
+        systems_data = await api_requests.eddb_pop_systems('public holiday')
 
+        for system in systems_data:
+            check = []
+            for state in system['states']:
+                if state['name_lower'] == 'expansion':
+                    check.append(1)
+                elif state['name_lower'] == 'civil liberty':
+                    check.append(1)
+                elif state['name_lower'] == 'investment' or state['name_lower'] == 'boom':
+                    check.append(1)
+                else:
+                    break
+
+                if len(check) == 3:
+                    systems_list[system['name']] = {}
+
+                    home_coordinates = np.array([self.home_system['x'], self.home_system['y'], self.home_system['z']])
+                    target_coordinates = np.array([system['x'], system['y'], system['z']])
+                    squared_dist = np.sum((home_coordinates - target_coordinates) ** 2, axis=0)
+                    distance = np.sqrt(squared_dist)
+
+                    systems_list[system['name']]['distance'] = str(np.round(distance, 1))
+                    systems_list[system['name']]['updated_ago'] = await updated_ago_text(system['updated_at']).replace('*', '')
+        if DEBUG:
+            print('Cached get_ltd_systems:', systems_list)
         return systems_list
