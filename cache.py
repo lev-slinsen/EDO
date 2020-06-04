@@ -1,55 +1,11 @@
 import datetime
-import json
-import os
 from datetime import datetime
 from datetime import timedelta
 
-import aiohttp
-import pytz
-from dotenv import load_dotenv
 import numpy as np
 
 import api_requests
-
-load_dotenv()
-DEBUG = os.getenv('DEBUG')
-FACTION_NAME = os.getenv('FACTION_NAME').lower()
-
-edbgs_uri = 'https://elitebgs.app/api/ebgs/v4/'
-eddb_uri = 'https://eddbapi.kodeblox.com/api/v4/'
-frontier_tz = pytz.timezone('UTC')
-frontier_time = datetime.now(frontier_tz)
-
-
-async def updated_ago_text(updated_at_data):
-    updated_at = frontier_tz.localize(datetime.strptime(updated_at_data[0:16], '%Y-%m-%dT%H:%M'))
-    highlight = False
-    updated_ago = (frontier_time - updated_at)
-
-    if updated_ago < timedelta(seconds=0):  # Prevents random bug that subtracts 2 days from timedelta
-        print('!ALERT')
-        updated_ago += timedelta(days=1)
-        updated_ago = timedelta(days=1) - updated_ago
-    if updated_ago < timedelta(seconds=0):
-        updated_ago = timedelta(days=1)
-    if updated_ago >= timedelta(hours=12):
-        highlight = True
-
-    updated_ago_text = str(updated_ago).split(':')[0]
-    if (
-            updated_ago_text[-2:] == '1' or
-            updated_ago_text[-2:] == ' 1' or
-            updated_ago_text[-2:] == '21'
-    ):
-        text = f'{updated_ago_text} hour ago'
-    elif updated_ago_text[-2:] == '0':
-        text = 'less than an hour ago'
-    else:
-        text = f'{updated_ago_text} hours ago'
-
-    if highlight:
-        text = f'**{text}**'
-    return text
+import settings as s
 
 
 class Cache:
@@ -66,14 +22,44 @@ class Cache:
         self.unvisited_systems = await self.get_unvisited_systems(self.faction_data)
         self.ltd_systems = await self.get_ltd_systems()
 
-        if DEBUG:
+        if s.DEBUG:
             print('Cache init done')
 
     async def faction_update(self):
-        data = await api_requests.edbgs_faction(FACTION_NAME)
+        data = await api_requests.edbgs_faction(s.FACTION_NAME)
         home_system_name = data['docs'][0]['faction_presence'][0]['system_name']
         self.home_system = await api_requests.edbgs_system(home_system_name)
         return data
+
+    async def updated_ago_text(self, updated_at_data):
+        updated_at = s.frontier_tz.localize(datetime.strptime(updated_at_data[0:16], '%Y-%m-%dT%H:%M'))
+        highlight = False
+        updated_ago = (s.frontier_time - updated_at)
+
+        if updated_ago < timedelta(seconds=0):  # Prevents random bug that subtracts 2 days from timedelta
+            print('!ALERT')
+            updated_ago += timedelta(days=1)
+            updated_ago = timedelta(days=1) - updated_ago
+        if updated_ago < timedelta(seconds=0):
+            updated_ago = timedelta(days=1)
+        if updated_ago >= timedelta(hours=12):
+            highlight = True
+
+        updated_ago_text = str(updated_ago).split(':')[0]
+        if (
+                updated_ago_text[-2:] == '1' or
+                updated_ago_text[-2:] == ' 1' or
+                updated_ago_text[-2:] == '21'
+        ):
+            text = f'{updated_ago_text} hour ago'
+        elif updated_ago_text[-2:] == '0':
+            text = 'less than an hour ago'
+        else:
+            text = f'{updated_ago_text} hours ago'
+
+        if highlight:
+            text = f'**{text}**'
+        return text
 
     # async def stake_text(self, station):
     #     text = ''
@@ -125,11 +111,11 @@ class Cache:
                         if (
                                 conflict['status'] == 'active' and
                                 (
-                                        conflict['faction1']['name_lower'] == FACTION_NAME or
-                                        conflict['faction2']['name_lower'] == FACTION_NAME
+                                        conflict['faction1']['name_lower'] == s.FACTION_NAME or
+                                        conflict['faction2']['name_lower'] == s.FACTION_NAME
                                 )
                         ):
-                            if conflict['faction1']['name_lower'] == FACTION_NAME:
+                            if conflict['faction1']['name_lower'] == s.FACTION_NAME:
                                 us = 'faction1'
                                 them = 'faction2'
                             else:
@@ -143,9 +129,9 @@ class Cache:
                                 'score_them': conflict[them]['days_won'],
                                 'win': conflict[them]['stake'],
                                 'loss': conflict[us]['stake'],
-                                'updated_ago': await updated_ago_text(system['updated_at'])
+                                'updated_ago': await self.updated_ago_text(system['updated_at'])
                             }
-        if DEBUG:
+        if s.DEBUG:
             print('Cached conflicts_active:', report)
         return report
 
@@ -159,13 +145,13 @@ class Cache:
 
                     for opp_system in opp_faction_data['docs'][0]['faction_presence']:
                         if opp_system['conflicts']:
-                            if opp_system['conflicts'][0]['opponent_name_lower'] == FACTION_NAME:
+                            if opp_system['conflicts'][0]['opponent_name_lower'] == s.FACTION_NAME:
                                 report[system['system_name']] = {
                                     'state': system['conflicts'][0]['type'],
                                     'opponent': system['conflicts'][0]['opponent_name'],
                                     'win': opp_system['conflicts'][0]['stake'],
                                     'loss': system['conflicts'][0]['stake'],
-                                    'updated_ago': await updated_ago_text(system['updated_at'])
+                                    'updated_ago': await self.updated_ago_text(system['updated_at'])
                                 }
         return report
 
@@ -182,7 +168,7 @@ class Cache:
 
                     for opp_system in opp_faction_data['docs'][0]['faction_presence']:
                         if opp_system['conflicts']:
-                            if opp_system['conflicts'][0]['opponent_name_lower'] == FACTION_NAME:
+                            if opp_system['conflicts'][0]['opponent_name_lower'] == s.FACTION_NAME:
                                 days_won = system['conflicts'][0]['days_won']
                                 opp_days_won = opp_system['conflicts'][0]['days_won']
 
@@ -197,9 +183,9 @@ class Cache:
                                     'state': system['conflicts'][0]['type'],
                                     'status': status,
                                     'stake': stake,
-                                    'updated_ago': await updated_ago_text(system['updated_at'])
+                                    'updated_ago': await self.updated_ago_text(system['updated_at'])
                                 }
-        if DEBUG:
+        if s.DEBUG:
             print('Cached conflicts_recovering:', report)
         return report
 
@@ -210,15 +196,15 @@ class Cache:
                     system['system_name'] not in self.conflicts_active and
                     system['system_name'] not in self.conflicts_pending
             ):
-                updated_ago = (frontier_time -
-                               frontier_tz.localize(datetime.strptime(system['updated_at'][0:16], '%Y-%m-%dT%H:%M')))
+                updated_ago = (s.frontier_time -
+                               s.frontier_tz.localize(datetime.strptime(system['updated_at'][0:16], '%Y-%m-%dT%H:%M')))
 
                 for day in report:
                     if timedelta(days=day+1) > updated_ago > timedelta(days=day) and updated_ago < timedelta(days=7):
                         report[day].append(system['system_name'])
                 if updated_ago >= timedelta(days=7):
                     report[7].append(system['system_name'])
-        if DEBUG:
+        if s.DEBUG:
             print('Cached unvisited_systems:', report)
         return report
 
@@ -245,9 +231,11 @@ class Cache:
                     target_coordinates = np.array([system['x'], system['y'], system['z']])
                     squared_dist = np.sum((home_coordinates - target_coordinates) ** 2, axis=0)
                     distance = np.sqrt(squared_dist)
-
                     systems_list[system['name']]['distance'] = str(np.round(distance, 1))
-                    systems_list[system['name']]['updated_ago'] = await updated_ago_text(system['updated_at']).replace('*', '')
-        if DEBUG:
+
+                    updated_ago = await self.updated_ago_text(system['updated_at'])
+                    systems_list[system['name']]['updated_ago'] = updated_ago.replace('*', '')
+
+        if s.DEBUG:
             print('Cached get_ltd_systems:', systems_list)
         return systems_list

@@ -1,13 +1,11 @@
 import os
 from collections import OrderedDict
-from datetime import datetime
 
 import discord
-import pytz
 from discord.ext import commands
 from discord.ext import tasks
-from dotenv import load_dotenv
 
+import settings as s
 from cache import Cache
 
 # TODO: check for number of symbols in report (max 2000)
@@ -16,30 +14,9 @@ from cache import Cache
 # TODO: add links to systems and stations on EDDB or Inara
 # TODO: add retreat tracking
 
-load_dotenv()
-TOKEN = os.getenv('DISCORD_TOKEN')
-DEBUG = os.getenv('DEBUG')
-CHANNEL_ADMIN = int(os.getenv('CHANNEL_ADMIN'))
-ADMIN_ROLE = os.getenv('ADMIN_ROLE')
 
 bot = commands.Bot(command_prefix='!')
 client = discord.Client()
-
-frontier_tz = pytz.timezone('UTC')
-frontier_time = datetime.now(frontier_tz)
-
-number_emoji = (':zero:', ':one:', ':two:', ':three:', ':four:', ':five:',
-                ':six:', ':seven:', ':eight:', ':nine:', ':keycap_ten:')
-errors_text = {1: '`No such faction. Please check faction name and try again.`',
-               2: '`Unable to add comment to this objective. '
-                  'Instead, try changing objective text with the "!event" command.`',
-               3: '`There is no event to delete.`',
-               4: '`There are multiple events, please select the one to delete with respective the number.`',
-               5: '`Incorrect event selected for change.`',
-               6: "`There's a different number of objectives, please try again.`",
-               7: '`Typo?`',
-               8: '`This message will self-update every 30 minutes. '
-                  'Please mention outside of this report to avoid mention spam.`'}
 
 
 '''What I do on startup'''
@@ -87,32 +64,32 @@ class AutoReport:
 
     @tasks.loop(minutes=30)
     async def report_loop(self):
-        if DEBUG:
-            print(f'{frontier_time}: report_loop start')
-        await bot.get_channel(CHANNEL_ADMIN).send(f'`Updating report...`')
+        if s.DEBUG:
+            print(f'{s.frontier_time}: report_loop start')
+        await bot.get_channel(s.CHANNEL_ADMIN).send(f'`Updating report...`')
         self.cache = Cache()
         await self.cache.gather_data()
         if self.cache.faction_data['error'] != 0:
-            await bot.get_channel(CHANNEL_ADMIN).send(errors_text[self.cache.faction_data['error']])
+            await bot.get_channel(s.CHANNEL_ADMIN).send(s.errors_text[self.cache.faction_data['error']])
             return
         await self.objectives_collect()
-        await purge_own_messages(CHANNEL_ADMIN)
+        await purge_own_messages(s.CHANNEL_ADMIN)
         await self.report_send()
-        await purge_commands(CHANNEL_ADMIN)
-        if DEBUG:
+        await purge_commands(s.CHANNEL_ADMIN)
+        if s.DEBUG:
             print('report_loop done\n')
 
     async def objectives_collect(self):
-        if DEBUG:
+        if s.DEBUG:
             print('objective_collect start')
         await self.report_active(self.cache.conflicts_active)
         await self.report_pending(self.cache.conflicts_pending)
         await self.report_recovering(self.cache.conflicts_recovering)
-        if DEBUG:
+        if s.DEBUG:
             print('objective_collect done')
 
     async def report_send(self):
-        if DEBUG:
+        if s.DEBUG:
             print('report_send start')
 
         report = f'Current objectives for {os.getenv("FACTION_NAME")}:\n\n'
@@ -123,44 +100,44 @@ class AutoReport:
         for num, objective_active in enumerate(self.objectives):
             objective = self.objectives[objective_active]
             if objective.status == 'active':
-                if DEBUG:
+                if s.DEBUG:
                     print(f'conflict_active_text for {objective_active} start')
                 report += await objective.conflict_active_text(num + 1, objective_active)
-                if DEBUG:
+                if s.DEBUG:
                     print(f'conflict_active_text for {objective_active} done')
             elif objective.status == 'event':
-                if DEBUG:
+                if s.DEBUG:
                     print(f'conflict_active_text for event #{num + 1} start')
-                report += f'{number_emoji[num + 1]} {objective.text}\n\n'
-                if DEBUG:
+                report += f'{s.number_emoji[num + 1]} {objective.text}\n\n'
+                if s.DEBUG:
                     print(f'conflict_active_text for event #{num + 1} done')
 
         for objective_pending in self.objectives:
             objective = self.objectives[objective_pending]
             if objective.status == 'pending':
-                if DEBUG:
+                if s.DEBUG:
                     print(f'conflict_pending_text for {objective_pending} start')
                 report += await objective.conflict_pending_text(objective_pending)
-                if DEBUG:
+                if s.DEBUG:
                     print(f'conflict_pending_text for {objective_pending} done')
 
         for objective_recovering in self.objectives:
             objective = self.objectives[objective_recovering]
             if objective.status in ('victory', 'defeat'):
-                if DEBUG:
+                if s.DEBUG:
                     print(f'conflict_recovering_text for {objective_recovering} start')
                 report += await objective.conflict_recovering_text(objective_recovering)
-                if DEBUG:
+                if s.DEBUG:
                     print(f'conflict_recovering_text for {objective_recovering} done')
 
         report += await self.unvisited_systems(self.cache.unvisited_systems)
 
-        await bot.get_channel(CHANNEL_ADMIN).send(report)
-        if DEBUG:
+        await bot.get_channel(s.CHANNEL_ADMIN).send(report)
+        if s.DEBUG:
             print('report_send done')
 
     async def report_active(self, conflicts_active):
-        if DEBUG:
+        if s.DEBUG:
             print('report_active start')
         for old_objective in self.objectives:
             if self.objectives[old_objective].status == 'active' and old_objective not in conflicts_active:
@@ -191,11 +168,11 @@ class AutoReport:
                 objective.score_us = conflicts_active[conflict]['score_us']
                 objective.score_them = conflicts_active[conflict]['score_them']
                 objective.updated_ago = conflicts_active[conflict]['updated_ago']
-        if DEBUG:
+        if s.DEBUG:
             print('report_active done')
 
     async def report_pending(self, conflicts_pending):
-        if DEBUG:
+        if s.DEBUG:
             print('report_pending start')
         for old_objective in self.objectives:
             if self.objectives[old_objective].status == 'pending' and old_objective not in conflicts_pending:
@@ -213,11 +190,11 @@ class AutoReport:
             else:
                 objective = self.objectives[conflict]
                 objective.updated_ago = conflicts_pending[conflict]['updated_ago']
-        if DEBUG:
+        if s.DEBUG:
             print('report_pending done')
 
     async def report_recovering(self, conflicts_recovering):
-        if DEBUG:
+        if s.DEBUG:
             print('report_recovering start')
         for old_objective in self.objectives:
             if (
@@ -237,7 +214,7 @@ class AutoReport:
             else:
                 objective = self.objectives[conflict]
                 objective.updated_ago = conflicts_recovering[conflict]['updated_ago']
-        if DEBUG:
+        if s.DEBUG:
             print('report_recovering done')
 
     async def unvisited_systems(self, unvisited_systems):
@@ -278,7 +255,7 @@ class Objective:
     async def conflict_active_text(self, num, system_name):
         text = '{0} {1} in **{2}**\n' \
                '> {3} [ {4} - {5} ] {6}\n'.format(
-                number_emoji[num],
+                s.number_emoji[num],
                 self.state.capitalize(),
                 system_name,
                 os.getenv("FACTION_NAME"),
@@ -336,14 +313,14 @@ class Objective:
                          '!comment [objective_number] [your_text] - Adds comment to the specified objective.\n'
                          '!comment [objective_number] - Removes an objective comment.\n'
                          'To add multiple lines, wrap comment text into "".')
-@commands.has_role(ADMIN_ROLE)
+@commands.has_role(s.ADMIN_ROLE)
 async def comment(ctx, arg_num=None, *args):
     if '<@' in arg_num:
-        await bot.get_channel(CHANNEL_ADMIN).send(errors_text[8])
+        await bot.get_channel(s.CHANNEL_ADMIN).send(s.errors_text[8])
         return
     for arg in args:
         if '<@' in arg:
-            await bot.get_channel(CHANNEL_ADMIN).send(errors_text[8])
+            await bot.get_channel(s.CHANNEL_ADMIN).send(s.errors_text[8])
             return
     if not arg_num:
         auto_report.comment = ''
@@ -358,13 +335,13 @@ async def comment(ctx, arg_num=None, *args):
             for num, objective in enumerate(auto_report.objectives):
                 if int(arg_num) == num:
                     if auto_report.objectives[objective].status != 'active':
-                        await bot.get_channel(CHANNEL_ADMIN).send(errors_text[2])
+                        await bot.get_channel(s.CHANNEL_ADMIN).send(s.errors_text[2])
     else:
         auto_report.comment = f'{arg_num} ' + (' '.join(args))
 
-    await purge_own_messages(CHANNEL_ADMIN)
+    await purge_own_messages(s.CHANNEL_ADMIN)
     await auto_report.report_send()
-    await purge_commands(CHANNEL_ADMIN)
+    await purge_commands(s.CHANNEL_ADMIN)
 
 
 @bot.command(name='event',
@@ -374,14 +351,14 @@ async def comment(ctx, arg_num=None, *args):
                          '!event - Removes the custom objective, but only if there is only one.\n'
                          '!event [objective_number] - Removes the specified custom objective.\n'
                          'To add multiple lines, wrap objective text into "".')
-@commands.has_role(ADMIN_ROLE)
+@commands.has_role(s.ADMIN_ROLE)
 async def event(ctx, arg_num=None, *args):
     if '<@' in arg_num:
-        await bot.get_channel(CHANNEL_ADMIN).send(errors_text[8])
+        await bot.get_channel(s.CHANNEL_ADMIN).send(s.errors_text[8])
         return
     for arg in args:
         if '<@' in arg:
-            await bot.get_channel(CHANNEL_ADMIN).send(errors_text[8])
+            await bot.get_channel(s.CHANNEL_ADMIN).send(s.errors_text[8])
             return
     objectives = auto_report.objectives
     if not arg_num:
@@ -390,10 +367,10 @@ async def event(ctx, arg_num=None, *args):
             if objective.startswith('event'):
                 count += 1
         if count <= 0:
-            await bot.get_channel(CHANNEL_ADMIN).send(errors_text[3])
+            await bot.get_channel(s.CHANNEL_ADMIN).send(s.errors_text[3])
             return
         elif count >= 2:
-            await bot.get_channel(CHANNEL_ADMIN).send(errors_text[4])
+            await bot.get_channel(s.CHANNEL_ADMIN).send(s.errors_text[4])
             return
         else:
             for objective in objectives:
@@ -406,7 +383,7 @@ async def event(ctx, arg_num=None, *args):
                 objectives[f'event {arg_num}'].text = (' '.join(args))
                 changed += 1
         if changed == 0:
-            await bot.get_channel(CHANNEL_ADMIN).send(errors_text[5])
+            await bot.get_channel(s.CHANNEL_ADMIN).send(s.errors_text[5])
             return
         if not args:
             objectives.pop(f'event {arg_num}')
@@ -416,23 +393,23 @@ async def event(ctx, arg_num=None, *args):
         objective.status = 'event'
         objective.text = f'{arg_num} ' + (' '.join(args))
 
-    await purge_own_messages(CHANNEL_ADMIN)
+    await purge_own_messages(s.CHANNEL_ADMIN)
     await auto_report.report_send()
-    await purge_commands(CHANNEL_ADMIN)
+    await purge_commands(s.CHANNEL_ADMIN)
 
 
 @bot.command(name='order',
              brief='Puts objectives in a different order',
              description='Puts objectives in a different order. Pass a set of numbers with no spaces.')
-@commands.has_role(ADMIN_ROLE)
+@commands.has_role(s.ADMIN_ROLE)
 async def order(ctx, arg):
     new_order = OrderedDict()
     if len(arg) != len(auto_report.objectives):
-        await bot.get_channel(CHANNEL_ADMIN).send(errors_text[6])
+        await bot.get_channel(s.CHANNEL_ADMIN).send(s.errors_text[6])
         return
     for num in range(1, len(auto_report.objectives) + 1):
         if str(num) not in arg:
-            await bot.get_channel(CHANNEL_ADMIN).send(errors_text[7])
+            await bot.get_channel(s.CHANNEL_ADMIN).send(s.errors_text[7])
             return
     for idx, arg_num in enumerate(arg):
         arg_num = int(arg_num)
@@ -444,9 +421,9 @@ async def order(ctx, arg):
                     new_order[objective] = auto_report.objectives[objective]
     auto_report.objectives = new_order
 
-    await purge_own_messages(CHANNEL_ADMIN)
+    await purge_own_messages(s.CHANNEL_ADMIN)
     await auto_report.report_send()
-    await purge_commands(CHANNEL_ADMIN)
+    await purge_commands(s.CHANNEL_ADMIN)
 
 
 @bot.command(name='ltd')
@@ -457,7 +434,7 @@ async def ltd(ctx):
         text = 'Best places to sell your :gem:\n'
         for system in auto_report.cache.ltd_systems:
             system_data = auto_report.cache.ltd_systems[system]
-            text += f"**{system}**: distance from HQ is {system_data['distance']}, last updated {system_data['updated_ago']}\n"
+            text += f"**{system}**: distance from HQ is {system_data['distance']} Ly, last updated {system_data['updated_ago']}\n"
 
     await ctx.channel.send(text)
     await purge_commands(ctx.channel.id)
@@ -486,4 +463,4 @@ async def ltd(ctx):
 #     await bot_start()
 
 
-bot.run(TOKEN)
+bot.run(s.TOKEN)
