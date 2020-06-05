@@ -4,8 +4,7 @@ import aiohttp
 
 import settings as s
 
-
-logger = s.Logger(__name__)
+log = s.logger_req.logger
 
 
 async def edbgs_faction(faction):
@@ -17,23 +16,33 @@ async def edbgs_faction(faction):
     async with aiohttp.ClientSession() as session:
         async with session.get(faction_uri) as faction_json:
             if faction_json.status != 200:
-                with open('EDO/err.log', 'a+') as err_log:
-                    if s.DEBUG:
-                        print(f'Bad faction status code: {faction_json.status}\n')
-                    err_log.write(f'{s.frontier_time}, Bad faction status code: {faction_json.status}\n')
+                log.error(f'edbgs_factions for "{faction}" status: {faction_json.status}')
 
             faction_json_data = json.loads(await faction_json.text())
-            faction_json_data['error'] = 0
 
+            faction_json_data['error'] = 0
             if not faction_json_data['docs']:
-                print(f'{s.frontier_time}, Bad faction name: {faction}')
-                with open('err.log', 'a+') as err_log:
-                    err_log.write(f'{s.frontier_time}, Bad faction name: {faction}\n')
                 faction_json_data['error'] = 1
 
-            logger.log.debug(f'edbgs_factions for "{faction}" reply: {faction_json_data}')
-
+            log.debug(f'edbgs_factions for "{faction}" reply: {faction_json_data}')
             return faction_json_data
+
+
+async def edbgs_station(station):
+    station_uri = station
+    for char in s.uri_chars:
+        station_uri = station_uri.replace(char, s.uri_chars[char])
+    station_uri = f"{s.edbgs_uri}stations?name={station_uri}"
+
+    async with aiohttp.ClientSession() as session:
+        async with session.get(station_uri) as station_json:
+            if station_json.status != 200:
+                log.error(f'edbgs_station for "{station}" status: {station_json.status}')
+
+            station_json_data = json.loads(await station_json.text())
+            log.debug(f'edbgs_station for "{station}" reply: {station_json_data}')
+
+            return station_json_data
 
 
 async def edbgs_system(system):
@@ -44,10 +53,11 @@ async def edbgs_system(system):
 
     async with aiohttp.ClientSession() as session:
         async with session.get(system_uri) as system_json:
-            system_json_data = json.loads(await system_json.text())
+            if system_json.status != 200:
+                log.error(f'edbgs_system for "{system}" status: {system_json.status}')
 
-            if s.DEBUG:
-                print(f'edbgs_system for "{system}" reply: {system_json_data}')
+            system_json_data = json.loads(await system_json.text())
+            log.debug(f'edbgs_system for "{system}" reply: {system_json_data}')
 
             return system_json_data['docs'][0]
 
@@ -60,17 +70,25 @@ async def eddb_pop_systems(state):
 
     async with aiohttp.ClientSession() as session:
         async with session.get(state_uri) as system_json:
-            pages = json.loads(await system_json.text())['pages']
+            if system_json.status != 200:
+                log.error(f'eddb_pop_systems for "{state}" status: {system_json.status}')
+
             system_json_data = json.loads(await system_json.text())
+            log.debug(f'eddb_pop_systems for "{state}", page 1 reply: {system_json_data}')
+
+            pages = json.loads(await system_json.text())['pages']
             if pages > 1:
                 for page in range(2, pages+1):
                     async with aiohttp.ClientSession() as session:
                         async with session.get(f"{state_uri}&page={page}") as system_json:
+                            if system_json.status != 200:
+                                log.error(f'eddb_pop_systems for "{state}", page {page} status: {system_json.status}')
+
                             system_json_data_page = json.loads(await system_json.text())
+                            log.debug(f'eddb_pop_systems for "{state}", page {page} reply: {system_json_data_page}')
+
                             for system in system_json_data_page['docs']:
                                 system_json_data['docs'].append(system)
 
-                if s.DEBUG:
-                    print(f'eddb_pop_systems for "{state}" reply: {system_json_data}')
-
+                log.debug(f'eddb_pop_systems for "{state}", all pages combined: {system_json_data}')
                 return system_json_data['docs']

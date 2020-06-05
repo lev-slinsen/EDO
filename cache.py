@@ -7,6 +7,8 @@ import numpy as np
 import requests
 import settings as s
 
+log = s.logger_dev.logger
+
 
 class Cache:
     def __init__(self):
@@ -61,41 +63,36 @@ class Cache:
             text = f'**{text}**'
         return text
 
-    # async def stake_text(self, station):
-    #     text = ''
-    #     if (
-    #             station and
-    #             station not in self.stations
-    #     ):
-    #         station_name = station.replace(' ', '%20')
-    #         async with aiohttp.ClientSession() as session:
-    #             async with session.get(f"{edbgs_uri}stations?name={station_name}") as station_json:
-    #                 station_json_data = json.loads(await station_json.text())
-    #                 if DEBUG:
-    #                     print(f'  > Station data: {station_json_data}')
-    #                 if station_json_data['total'] == 0:
-    #                     self.stations[station] = 'Settlement'
-    #                 else:
-    #                     if station_json_data['docs'][0]['type'] in ('coriolis', 'coriolis starport'):
-    #                         self.stations[station] = f'Coriolis starport, L'
-    #                     elif station_json_data['docs'][0]['type'] in ('bernal', 'ocellus starport'):
-    #                         self.stations[station] = f'Ocellus starport, L'
-    #                     elif station_json_data['docs'][0]['type'] in ('orbis', 'orbis starport'):
-    #                         self.stations[station] = f'Orbis starport, L'
-    #                     elif station_json_data['docs'][0]['type'] in ('crateroutpost', 'planetary port', 'craterport'):
-    #                         self.stations[station] = f'Surface station, L'
-    #                     elif station_json_data['docs'][0]['type'] == 'asteroidbase':
-    #                         self.stations[station] = f'Asteroid base, L'
-    #                     elif station_json_data['docs'][0]['type'] == 'megaship':
-    #                         self.stations[station] = f'Megaship, L'
-    #                     elif station_json_data['docs'][0]['type'] in ('planetary outpost', 'surfacestation'):
-    #                         self.stations[station] = f'Settlement'
-    #                     elif station_json_data['docs'][0]['type'][-7:] == 'outpost':
-    #                         self.stations[station] = f'Outpost, M'
-    #                     else:
-    #                         self.stations[station] = f'**Unknown type**'
-        #     text = f'{station} ({self.stations[station]})'
-        # return text
+    async def stake_text(self, station):
+        if station and (station not in self.stations):
+            data = await requests.edbgs_station(station)
+
+            if data['total'] == 0:
+                self.stations[station] = 'Settlement'
+            else:
+                if data['docs'][0]['type'] in ('coriolis', 'coriolis starport'):
+                    self.stations[station] = f'Coriolis starport, L'
+                elif data['docs'][0]['type'] in ('bernal', 'ocellus starport'):
+                    self.stations[station] = f'Ocellus starport, L'
+                elif data['docs'][0]['type'] in ('orbis', 'orbis starport'):
+                    self.stations[station] = f'Orbis starport, L'
+                elif data['docs'][0]['type'] in ('crateroutpost', 'planetary port', 'craterport'):
+                    self.stations[station] = f'Surface station, L'
+                elif data['docs'][0]['type'] == 'asteroidbase':
+                    self.stations[station] = f'Asteroid base, L'
+                elif data['docs'][0]['type'] == 'megaship':
+                    self.stations[station] = f'Megaship, L'
+                elif data['docs'][0]['type'] in ('planetary outpost', 'surfacestation'):
+                    self.stations[station] = f'Settlement'
+                elif data['docs'][0]['type'][-7:] == 'outpost':
+                    self.stations[station] = f'Outpost, M'
+                else:
+                    self.stations[station] = f'**Unknown type**'
+        elif not station:
+            return ''
+
+        text = f'{station} ({self.stations[station]})'
+        return text
 
     async def get_conflicts_active(self, faction_data):
         report = {}
@@ -127,8 +124,8 @@ class Cache:
                                 'opponent': conflict[them]['name'],
                                 'score_us': conflict[us]['days_won'],
                                 'score_them': conflict[them]['days_won'],
-                                'win': conflict[them]['stake'],
-                                'loss': conflict[us]['stake'],
+                                'win': await self.stake_text(conflict[them]['stake']),
+                                'loss': await self.stake_text(conflict[us]['stake']),
                                 'updated_ago': await self.updated_ago_text(system['updated_at'])
                             }
         if s.DEBUG:
@@ -149,8 +146,8 @@ class Cache:
                                 report[system['system_name']] = {
                                     'state': system['conflicts'][0]['type'],
                                     'opponent': system['conflicts'][0]['opponent_name'],
-                                    'win': opp_system['conflicts'][0]['stake'],
-                                    'loss': system['conflicts'][0]['stake'],
+                                    'win': await self.stake_text(opp_system['conflicts'][0]['stake']),
+                                    'loss': await self.stake_text(system['conflicts'][0]['stake']),
                                     'updated_ago': await self.updated_ago_text(system['updated_at'])
                                 }
         return report
@@ -182,7 +179,7 @@ class Cache:
                                 report[system['system_name']] = {
                                     'state': system['conflicts'][0]['type'],
                                     'status': status,
-                                    'stake': stake,
+                                    'stake': await self.stake_text(stake),
                                     'updated_ago': await self.updated_ago_text(system['updated_at'])
                                 }
         if s.DEBUG:

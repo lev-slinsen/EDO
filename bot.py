@@ -13,9 +13,7 @@ from cache import Cache
 # TODO: add reaction mechanics
 # TODO: add links to systems and stations on EDDB or Inara
 # TODO: add retreat tracking
-
-
-logger = s.Logger('bot')
+# TODO: add ignore command to delete unwanted system from objectives
 
 
 bot = commands.Bot(command_prefix='!')
@@ -31,7 +29,6 @@ async def on_ready():
     for guild in bot.guilds:
         print(f'"{guild.name}" with id: {guild.id}')
     print()
-    logger.log.debug(f'Log Entry')
     await bot_start()
 
 
