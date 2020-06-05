@@ -1,4 +1,5 @@
 import logging
+from logging.handlers import RotatingFileHandler
 import os
 from datetime import datetime
 
@@ -43,9 +44,9 @@ class Logger:
             os.makedirs('Logs')
         self.logger = logging.getLogger(name)
         self.logger.setLevel(logging.DEBUG)
-        formatter = logging.Formatter('%(asctime)s:%(levelname)s: %(message)s')
+        formatter = logging.Formatter('%(asctime)s : %(levelname)s : %(filename)s : %(funcName)s : %(message)s')
 
-        file_handler = logging.FileHandler(f'Logs/{name}.log', encoding='utf-8')
+        file_handler = RotatingFileHandler(f'Logs/{name}.log', encoding='utf-8', maxBytes=5*1024*1024, mode='a', backupCount=2)
         file_handler.setFormatter(formatter)
         self.logger.addHandler(file_handler)
 
@@ -56,4 +57,3 @@ class Logger:
 
 logger_dev = Logger('dev')
 logger_usr = Logger('usr')
-logger_req = Logger('req')

@@ -4,7 +4,7 @@ import aiohttp
 
 import settings as s
 
-log = s.logger_req.logger
+log = s.logger_dev.logger
 
 
 async def edbgs_faction(faction):
@@ -16,7 +16,7 @@ async def edbgs_faction(faction):
     async with aiohttp.ClientSession() as session:
         async with session.get(faction_uri) as faction_json:
             if faction_json.status != 200:
-                log.error(f'edbgs_factions for "{faction}" status: {faction_json.status}')
+                log.error(f'input "{faction}", status {faction_json.status}')
 
             faction_json_data = json.loads(await faction_json.text())
 
@@ -24,7 +24,7 @@ async def edbgs_faction(faction):
             if not faction_json_data['docs']:
                 faction_json_data['error'] = 1
 
-            log.debug(f'edbgs_factions for "{faction}" reply: {faction_json_data}')
+            log.debug(f'input "{faction}", reply {faction_json_data}')
             return faction_json_data
 
 
@@ -37,10 +37,10 @@ async def edbgs_station(station):
     async with aiohttp.ClientSession() as session:
         async with session.get(station_uri) as station_json:
             if station_json.status != 200:
-                log.error(f'edbgs_station for "{station}" status: {station_json.status}')
+                log.error(f'input "{station}", status {station_json.status}')
 
             station_json_data = json.loads(await station_json.text())
-            log.debug(f'edbgs_station for "{station}" reply: {station_json_data}')
+            log.debug(f'input "{station}", reply {station_json_data}')
 
             return station_json_data
 
@@ -54,10 +54,10 @@ async def edbgs_system(system):
     async with aiohttp.ClientSession() as session:
         async with session.get(system_uri) as system_json:
             if system_json.status != 200:
-                log.error(f'edbgs_system for "{system}" status: {system_json.status}')
+                log.error(f'input "{system}", status {system_json.status}')
 
             system_json_data = json.loads(await system_json.text())
-            log.debug(f'edbgs_system for "{system}" reply: {system_json_data}')
+            log.debug(f'input "{system}", reply {system_json_data}')
 
             return system_json_data['docs'][0]
 
@@ -71,10 +71,10 @@ async def eddb_pop_systems(state):
     async with aiohttp.ClientSession() as session:
         async with session.get(state_uri) as system_json:
             if system_json.status != 200:
-                log.error(f'eddb_pop_systems for "{state}" status: {system_json.status}')
+                log.error(f'input "{state}", status {system_json.status}')
 
             system_json_data = json.loads(await system_json.text())
-            log.debug(f'eddb_pop_systems for "{state}", page 1 reply: {system_json_data}')
+            log.debug(f'input "{state}", page 1 reply {system_json_data}')
 
             pages = json.loads(await system_json.text())['pages']
             if pages > 1:
@@ -82,13 +82,13 @@ async def eddb_pop_systems(state):
                     async with aiohttp.ClientSession() as session:
                         async with session.get(f"{state_uri}&page={page}") as system_json:
                             if system_json.status != 200:
-                                log.error(f'eddb_pop_systems for "{state}", page {page} status: {system_json.status}')
+                                log.error(f'input "{state}", page {page} status {system_json.status}')
 
                             system_json_data_page = json.loads(await system_json.text())
-                            log.debug(f'eddb_pop_systems for "{state}", page {page} reply: {system_json_data_page}')
+                            log.debug(f'input "{state}", page {page} reply {system_json_data_page}')
 
                             for system in system_json_data_page['docs']:
                                 system_json_data['docs'].append(system)
 
-                log.debug(f'eddb_pop_systems for "{state}", all pages combined: {system_json_data}')
+                log.debug(f'input "{state}", all pages combined {system_json_data}')
                 return system_json_data['docs']

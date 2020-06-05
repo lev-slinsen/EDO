@@ -431,11 +431,15 @@ async def order(ctx, arg):
 async def ltd(ctx):
     if len(auto_report.cache.ltd_systems) == 0:
         text = '`No suitable systems at this moment`'
+    elif len(auto_report.cache.ltd_systems) == 1:
+        distance = auto_report.cache.ltd_systems[0]
+        text = f"There's a single suitable system: **{distance['system_name']}** " \
+               f"over {distance} Ly from HQ, last updated {distance['updated_ago']}\n"
     else:
         text = 'Best places to sell your :gem:\n'
-        for system in auto_report.cache.ltd_systems:
-            system_data = auto_report.cache.ltd_systems[system]
-            text += f"**{system}**: distance from HQ is {system_data['distance']} Ly, last updated {system_data['updated_ago']}\n"
+        for distance in auto_report.cache.ltd_systems:
+            system = auto_report.cache.ltd_systems[distance]
+            text += f"{distance} Ly | **{system['system_name']}** | last updated {system['updated_ago']}.\n"
 
     await ctx.channel.send(text)
     await purge_commands(ctx.channel.id)
