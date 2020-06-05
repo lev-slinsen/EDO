@@ -1,3 +1,4 @@
+import logging
 import os
 from datetime import datetime
 
@@ -34,3 +35,20 @@ errors_text = {1: '`No such faction. Please check faction name and try again.`',
                7: '`Typo?`',
                8: '`This message will self-update every 30 minutes. '
                   'Please mention outside of this report to avoid mention spam.`'}
+
+
+class Logger:
+    def __init__(self, name):
+        if not os.path.exists('Logs'):
+            os.makedirs('Logs')
+        self.log = logging.getLogger(name)
+        self.log.setLevel(logging.DEBUG)
+        formatter = logging.Formatter('%(asctime)s:%(levelname)s: %(message)s')
+
+        file_handler = logging.FileHandler(f'Logs/{name}.log', encoding='utf-8', mode='w')
+        file_handler.setFormatter(formatter)
+        self.log.addHandler(file_handler)
+
+        stream_handler = logging.StreamHandler()
+        stream_handler.setFormatter(formatter)
+        self.log.addHandler(stream_handler)

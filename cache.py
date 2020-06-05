@@ -4,7 +4,7 @@ from datetime import timedelta
 
 import numpy as np
 
-import api_requests
+import requests
 import settings as s
 
 
@@ -26,9 +26,9 @@ class Cache:
             print('Cache init done')
 
     async def faction_update(self):
-        data = await api_requests.edbgs_faction(s.FACTION_NAME)
+        data = await requests.edbgs_faction(s.FACTION_NAME)
         home_system_name = data['docs'][0]['faction_presence'][0]['system_name']
-        self.home_system = await api_requests.edbgs_system(home_system_name)
+        self.home_system = await requests.edbgs_system(home_system_name)
         return data
 
     async def updated_ago_text(self, updated_at_data):
@@ -105,7 +105,7 @@ class Cache:
             if system['conflicts']:
                 if system['conflicts'][0]['status'] == 'active':
                     system_name_lower = system['system_name_lower']
-                    data = await api_requests.edbgs_system(system_name_lower)
+                    data = await requests.edbgs_system(system_name_lower)
 
                     for conflict in data['conflicts']:
                         if (
@@ -141,7 +141,7 @@ class Cache:
             if system['conflicts']:
                 if system['conflicts'][0]['status'] == 'pending':
                     opponent_name = system['conflicts'][0]['opponent_name']
-                    opp_faction_data = await api_requests.edbgs_faction(opponent_name)
+                    opp_faction_data = await requests.edbgs_faction(opponent_name)
 
                     for opp_system in opp_faction_data['docs'][0]['faction_presence']:
                         if opp_system['conflicts']:
@@ -164,7 +164,7 @@ class Cache:
                         system['conflicts'][0]['status'] == ''
                 ):
                     opponent_name = system['conflicts'][0]['opponent_name']
-                    opp_faction_data = await api_requests.edbgs_faction(opponent_name)
+                    opp_faction_data = await requests.edbgs_faction(opponent_name)
 
                     for opp_system in opp_faction_data['docs'][0]['faction_presence']:
                         if opp_system['conflicts']:
@@ -210,7 +210,7 @@ class Cache:
 
     async def get_ltd_systems(self):
         systems_list = {}
-        systems_data = await api_requests.eddb_pop_systems('public holiday')
+        systems_data = await requests.eddb_pop_systems('public holiday')
 
         for system in systems_data:
             check = []

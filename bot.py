@@ -15,6 +15,9 @@ from cache import Cache
 # TODO: add retreat tracking
 
 
+logger = s.Logger('bot')
+
+
 bot = commands.Bot(command_prefix='!')
 client = discord.Client()
 
@@ -28,6 +31,7 @@ async def on_ready():
     for guild in bot.guilds:
         print(f'"{guild.name}" with id: {guild.id}')
     print()
+    logger.log.debug(f'Log Entry')
     await bot_start()
 
 

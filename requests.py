@@ -5,7 +5,7 @@ import aiohttp
 import settings as s
 
 
-# logging.basicConfig(filename='dev.log', level=logging.INFO, format='%(created)s: %(levelname)s: %(message)s')
+logger = s.Logger(__name__)
 
 
 async def edbgs_faction(faction):
@@ -31,7 +31,7 @@ async def edbgs_faction(faction):
                     err_log.write(f'{s.frontier_time}, Bad faction name: {faction}\n')
                 faction_json_data['error'] = 1
 
-            # logging.info(f'edbgs_factions for "{faction}" reply: {faction_json_data}')
+            logger.log.debug(f'edbgs_factions for "{faction}" reply: {faction_json_data}')
 
             return faction_json_data
 
