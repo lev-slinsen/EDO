@@ -3,10 +3,12 @@ import json
 import aiohttp
 
 import settings as s
+from decorators import bug_catcher
 
 log = s.logger_dev.logger
 
 
+@bug_catcher
 async def edbgs_faction(faction):
     faction_uri = faction
     for char in s.uri_chars:
@@ -28,6 +30,7 @@ async def edbgs_faction(faction):
             return faction_json_data
 
 
+@bug_catcher
 async def edbgs_station(station):
     station_uri = station
     for char in s.uri_chars:
@@ -45,6 +48,7 @@ async def edbgs_station(station):
             return station_json_data
 
 
+@bug_catcher
 async def edbgs_system(system):
     system_uri = system
     for char in s.uri_chars:
@@ -62,6 +66,7 @@ async def edbgs_system(system):
             return system_json_data['docs'][0]
 
 
+@bug_catcher
 async def eddb_pop_systems(state):
     state_uri = state
     for char in s.uri_chars:

@@ -7,6 +7,7 @@ from discord.ext import tasks
 
 import settings as s
 from cache import Cache
+from decorators import bug_catcher
 
 # TODO: check for number of symbols in report (max 2000)
 # TODO: add logging
@@ -15,6 +16,8 @@ from cache import Cache
 # TODO: add retreat tracking
 # TODO: add ignore command to delete unwanted system from objectives
 
+log_dev = s.logger_dev.logger
+log_usr = s.logger_usr.logger
 
 bot = commands.Bot(command_prefix='!')
 client = discord.Client()
@@ -24,29 +27,29 @@ client = discord.Client()
 
 
 @bot.event
+@bug_catcher
 async def on_ready():
-    print(f'{bot.user.name} is connected to the following guilds:')
+    log_dev.debug(f'{bot.user.name} is alive!')
     for guild in bot.guilds:
-        print(f'"{guild.name}" with id: {guild.id}')
-    print()
-    await bot_start()
-
-
-'''What I can do on my own'''
-
-
-async def bot_start():
+        if guild.name is None:
+            log_dev.critical(f'problem retrieving a guild')
+            return
     global auto_report
     auto_report = AutoReport(bot)
     auto_report.report_loop.start()
 
 
+'''What I can do on my own'''
+
+
+@bug_catcher
 async def purge_own_messages(channel_to):
     for message in await bot.get_channel(channel_to).history(limit=100).flatten():
         if message.author == bot.user:
             await message.delete()
 
 
+@bug_catcher
 async def purge_commands(channel_to):
     for message in await bot.get_channel(channel_to).history(limit=100).flatten():
         if message.content.startswith('!'):
@@ -62,11 +65,11 @@ class AutoReport:
         self.objectives = OrderedDict()
         self.comment = ''
         self.report_message_id = 0
+        log_dev.debug('AutoReport initialized')
 
     @tasks.loop(minutes=30)
+    @bug_catcher
     async def report_loop(self):
-        if s.DEBUG:
-            print(f'{s.frontier_time}: report_loop start')
         await bot.get_channel(s.CHANNEL_ADMIN).send(f'`Updating report...`')
         self.cache = Cache()
         await self.cache.gather_data()
@@ -77,69 +80,16 @@ class AutoReport:
         await purge_own_messages(s.CHANNEL_ADMIN)
         await self.report_send()
         await purge_commands(s.CHANNEL_ADMIN)
-        if s.DEBUG:
-            print('report_loop done\n')
+        # log_dev.debug(f"finished {'-'*20}")
 
+    @bug_catcher
     async def objectives_collect(self):
-        if s.DEBUG:
-            print('objective_collect start')
         await self.report_active(self.cache.conflicts_active)
         await self.report_pending(self.cache.conflicts_pending)
         await self.report_recovering(self.cache.conflicts_recovering)
-        if s.DEBUG:
-            print('objective_collect done')
 
-    async def report_send(self):
-        if s.DEBUG:
-            print('report_send start')
-
-        report = f'Current objectives for {os.getenv("FACTION_NAME")}:\n\n'
-
-        if self.comment:
-            report += f'{self.comment}\n\n'
-
-        for num, objective_active in enumerate(self.objectives):
-            objective = self.objectives[objective_active]
-            if objective.status == 'active':
-                if s.DEBUG:
-                    print(f'conflict_active_text for {objective_active} start')
-                report += await objective.conflict_active_text(num + 1, objective_active)
-                if s.DEBUG:
-                    print(f'conflict_active_text for {objective_active} done')
-            elif objective.status == 'event':
-                if s.DEBUG:
-                    print(f'conflict_active_text for event #{num + 1} start')
-                report += f'{s.number_emoji[num + 1]} {objective.text}\n\n'
-                if s.DEBUG:
-                    print(f'conflict_active_text for event #{num + 1} done')
-
-        for objective_pending in self.objectives:
-            objective = self.objectives[objective_pending]
-            if objective.status == 'pending':
-                if s.DEBUG:
-                    print(f'conflict_pending_text for {objective_pending} start')
-                report += await objective.conflict_pending_text(objective_pending)
-                if s.DEBUG:
-                    print(f'conflict_pending_text for {objective_pending} done')
-
-        for objective_recovering in self.objectives:
-            objective = self.objectives[objective_recovering]
-            if objective.status in ('victory', 'defeat'):
-                if s.DEBUG:
-                    print(f'conflict_recovering_text for {objective_recovering} start')
-                report += await objective.conflict_recovering_text(objective_recovering)
-                if s.DEBUG:
-                    print(f'conflict_recovering_text for {objective_recovering} done')
-
-        report += await self.unvisited_systems(self.cache.unvisited_systems)
-
-        await bot.get_channel(s.CHANNEL_ADMIN).send(report)
-        if s.DEBUG:
-            print('report_send done')
-
+    @bug_catcher
     async def report_active(self, conflicts_active):
-        if s.DEBUG:
-            print('report_active start')
         for old_objective in self.objectives:
             if self.objectives[old_objective].status == 'active' and old_objective not in conflicts_active:
                 self.objectives.pop(old_objective)
@@ -169,8 +119,6 @@ class AutoReport:
                 objective.score_us = conflicts_active[conflict]['score_us']
                 objective.score_them = conflicts_active[conflict]['score_them']
                 objective.updated_ago = conflicts_active[conflict]['updated_ago']
-        if s.DEBUG:
-            print('report_active done')
 
     async def report_pending(self, conflicts_pending):
         if s.DEBUG:
@@ -237,6 +185,54 @@ class AutoReport:
         elif lines == 2:
             text = text.replace(':\n', ' ')
         return text
+
+    async def report_send(self):
+        if s.DEBUG:
+            print('report_send start')
+
+        report = f'Current objectives for {os.getenv("FACTION_NAME")}:\n\n'
+
+        if self.comment:
+            report += f'{self.comment}\n\n'
+
+        for num, objective_active in enumerate(self.objectives):
+            objective = self.objectives[objective_active]
+            if objective.status == 'active':
+                if s.DEBUG:
+                    print(f'conflict_active_text for {objective_active} start')
+                report += await objective.conflict_active_text(num + 1, objective_active)
+                if s.DEBUG:
+                    print(f'conflict_active_text for {objective_active} done')
+            elif objective.status == 'event':
+                if s.DEBUG:
+                    print(f'conflict_active_text for event #{num + 1} start')
+                report += f'{s.number_emoji[num + 1]} {objective.text}\n\n'
+                if s.DEBUG:
+                    print(f'conflict_active_text for event #{num + 1} done')
+
+        for objective_pending in self.objectives:
+            objective = self.objectives[objective_pending]
+            if objective.status == 'pending':
+                if s.DEBUG:
+                    print(f'conflict_pending_text for {objective_pending} start')
+                report += await objective.conflict_pending_text(objective_pending)
+                if s.DEBUG:
+                    print(f'conflict_pending_text for {objective_pending} done')
+
+        for objective_recovering in self.objectives:
+            objective = self.objectives[objective_recovering]
+            if objective.status in ('victory', 'defeat'):
+                if s.DEBUG:
+                    print(f'conflict_recovering_text for {objective_recovering} start')
+                report += await objective.conflict_recovering_text(objective_recovering)
+                if s.DEBUG:
+                    print(f'conflict_recovering_text for {objective_recovering} done')
+
+        report += await self.unvisited_systems(self.cache.unvisited_systems)
+
+        await bot.get_channel(s.CHANNEL_ADMIN).send(report)
+        if s.DEBUG:
+            print('report_send done')
 
 
 class Objective:
@@ -439,33 +435,10 @@ async def ltd(ctx):
         text = 'Best places to sell your :gem:\n'
         for distance in auto_report.cache.ltd_systems:
             system = auto_report.cache.ltd_systems[distance]
-            text += f"{distance} Ly | **{system['system_name']}** | last updated {system['updated_ago']}.\n"
+            text += f"{distance} Ly | **{system['system_name']}** | {system['updated_ago']}.\n"
 
     await ctx.channel.send(text)
     await purge_commands(ctx.channel.id)
-
-
-# @bot.event
-# async def on_message(message):
-#     if (
-#             message.author == bot.user and
-#             auto_report.message_start in message.content
-#     ):
-#         global report_message_id
-#         report_message_id = message.id
-#     await bot.process_commands(message)
-
-
-# @bot.command(name='faction',
-#              brief='Changes the followed faction',
-#              description='Changes the followed faction')
-# @commands.has_role(ADMIN_ROLE)
-# async def faction(ctx, *args):
-#     await bot.get_channel(CHANNEL_ADMIN).send(f'`Changing faction...`')
-#     os.environ['FACTION_NAME'] = string.capwords(' '.join(args))
-#     hr.report_loop.cancel()     # object NoneType can't be used in 'await' expression
-#     await asyncio.sleep(3)      # TODO: fix this with a proper await
-#     await bot_start()
 
 
 bot.run(s.TOKEN)

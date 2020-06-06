@@ -7,15 +7,18 @@ import numpy as np
 
 import requests
 import settings as s
+from decorators import timer, bug_catcher
 
 log = s.logger_dev.logger
 
 
 class Cache:
     def __init__(self):
-        log.debug('Cache initiated')
         self.stations = {}
+        log.debug('Cache initiated')
 
+    @timer
+    @bug_catcher
     async def gather_data(self):
         self.faction_data = await self.faction_update()
         if self.faction_data['error'] != 0:
@@ -28,6 +31,7 @@ class Cache:
         self.ltd_systems = await self.get_ltd_systems()
         log.debug('Cache updated')
 
+    @bug_catcher
     async def faction_update(self):
         data = await requests.edbgs_faction(s.FACTION_NAME)
         home_system_name = data['docs'][0]['faction_presence'][0]['system_name']
@@ -36,6 +40,7 @@ class Cache:
         log.debug(f'data {data}')
         return data
 
+    @bug_catcher
     async def get_conflicts_active(self, faction_data):
         report = {}
         if not faction_data['docs']:
@@ -70,6 +75,7 @@ class Cache:
         log.debug(f'report {report}')
         return report
 
+    @bug_catcher
     async def get_conflicts_pending(self, faction_data):
         report = {}
         for system in faction_data['docs'][0]['faction_presence']:
@@ -92,6 +98,7 @@ class Cache:
         log.debug(f'report {report}')
         return report
 
+    @bug_catcher
     async def get_conflicts_recovering(self, faction_data):
         report = {}
         for system in faction_data['docs'][0]['faction_presence']:
@@ -123,6 +130,7 @@ class Cache:
         log.debug(f'report {report}')
         return report
 
+    @bug_catcher
     async def get_unvisited_systems(self, faction_data):
         report = {2: [], 3: [], 4: [], 5: [], 6: [], 7: []}
         for system in faction_data['docs'][0]['faction_presence']:
@@ -142,6 +150,7 @@ class Cache:
         log.debug(f'report {report}')
         return report
 
+    @bug_catcher
     async def get_ltd_systems(self):
         report = {}
         states = ('public holiday', 'pirate attack')
@@ -156,6 +165,7 @@ class Cache:
 
     "Text interpreters for human readable outputs"
 
+    @bug_catcher
     async def updated_ago_text(self, updated_at_data):
         updated_at = s.frontier_tz.localize(datetime.strptime(updated_at_data[0:16], '%Y-%m-%dT%H:%M'))
         highlight = False
@@ -189,6 +199,7 @@ class Cache:
         log.debug(f'text {text}')
         return text
 
+    @bug_catcher
     async def stake_text(self, station):
         if station and (station not in self.stations):
             data = await requests.edbgs_station(station)
@@ -222,6 +233,7 @@ class Cache:
         log.debug(f'text {text}')
         return text
 
+    @bug_catcher
     async def ltd_systems_text(self, data):
         systems = {}
 
