@@ -29,7 +29,7 @@ class Cache:
         self.unvisited_systems = await self.get_unvisited_systems(self.faction_data)
         self.ltd_systems = await self.get_ltd_systems()
 
-    '''Data gatherers that gather and process information for storage'''
+    '''Data gatherers that get information and process it for storage'''
 
     @bug_catcher
     async def faction_update(self):
@@ -133,10 +133,7 @@ class Cache:
     async def get_unvisited_systems(self, faction_data):
         report = {2: [], 3: [], 4: [], 5: [], 6: [], 7: []}
         for system in faction_data['docs'][0]['faction_presence']:
-            if (
-                    system['system_name'] not in self.conflicts_active and
-                    system['system_name'] not in self.conflicts_pending
-            ):
+            if system['system_name'] not in {**self.conflicts_active, **self.conflicts_pending}:
                 system_updated_at = datetime.strptime(system['updated_at'][0:16], '%Y-%m-%dT%H:%M')
                 updated_ago = (s.frontier_time - s.frontier_tz.localize(system_updated_at))
 
@@ -162,7 +159,7 @@ class Cache:
         log.debug(f'report_sorted {report_sorted}')
         return report_sorted
 
-    '''Interpret that turn data into more easily digestible formats'''
+    '''Interpret that turn data into more easily readable formats'''
 
     @bug_catcher
     async def updated_ago_text(self, updated_at_data):

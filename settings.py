@@ -55,11 +55,13 @@ class Logger:
 
 
 logger_dev = Logger('dev',
-                    handlers.TimedRotatingFileHandler(f'Logs/dev.log', when='midnight', backupCount=2, encoding='utf-8'),
+                    handlers.TimedRotatingFileHandler(f'Logs/dev.log', when='midnight',
+                                                      backupCount=2, encoding='utf-8'),
                     logging.Formatter('%(asctime)s : %(levelname)s : %(filename)s : %(funcName)s : %(message)s'),
                     True)
 
 logger_usr = Logger('usr',
-                    handlers.RotatingFileHandler(f'Logs/usr.log', maxBytes=0, backupCount=2, encoding='utf-8'),
+                    handlers.RotatingFileHandler(f'Logs/usr.log', maxBytes=7 * 1024 * 1024,
+                                                 backupCount=2, encoding='utf-8'),
                     logging.Formatter('%(asctime)s : %(message)s'),
                     False)
