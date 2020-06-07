@@ -464,17 +464,20 @@ async def order(ctx, arg):
 @bot.command(name='ltd')
 @bug_catcher
 async def ltd(ctx):
+    text = 'Best places to sell your :gem: (systems with best price are marked with :star:)\n'
     if len(auto_report.cache.ltd_systems) == 0:
         text = '`No suitable systems at this moment`'
-    elif len(auto_report.cache.ltd_systems) == 1:
-        distance = auto_report.cache.ltd_systems[0]
-        text = f"There's a single suitable system: **{distance['system_name']}** " \
-               f"over {distance} Ly from HQ, last updated {distance['updated_ago']}\n"
     else:
-        text = 'Best places to sell your :gem:\n'
         for distance in auto_report.cache.ltd_systems:
             system = auto_report.cache.ltd_systems[distance]
-            text += f"{distance} Ly | **{system['system_name']}** | {system['updated_ago']}.\n"
+            system_name = system['system_name']
+            if system['state'] == 'public_holiday':
+                system_name += ' :star:'
+            if len(auto_report.cache.ltd_systems) == 1:
+                text = f"There's a single suitable system: **{system['system_name']}** " \
+                       f"over {distance} Ly from HQ, last updated {system['updated_ago']}\n"
+            else:
+                text += f"{distance} Ly | **{system['system_name']}** | {system['updated_ago']}.\n"
 
     await ctx.channel.send(text)
     await purge_commands(ctx.channel.id)

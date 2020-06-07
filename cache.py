@@ -152,7 +152,7 @@ class Cache:
         states = ('public holiday', 'pirate attack')
         for state in states:
             systems_full = await requests.eddb_pop_systems(state)
-            systems_short = await self.ltd_systems_text(systems_full)
+            systems_short = await self.ltd_systems_text(state, systems_full)
             report.update(systems_short)
 
         report_sorted = collections.OrderedDict(sorted(report.items()))
@@ -230,7 +230,7 @@ class Cache:
         return text
 
     @bug_catcher
-    async def ltd_systems_text(self, data):
+    async def ltd_systems_text(self, state, data):
         systems = {}
 
         for system in data:
@@ -256,6 +256,7 @@ class Cache:
                     updated_ago = await self.updated_ago_text(system['updated_at'])
 
                     systems[distance_short] = {'system_name': system['name'],
-                                               'updated_ago': updated_ago.replace('*', '')}
+                                               'updated_ago': updated_ago.replace('*', ''),
+                                               'state': state}
         log.debug(f'systems {systems}')
         return systems
