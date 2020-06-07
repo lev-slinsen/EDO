@@ -39,23 +39,27 @@ errors_text = {1: '`No such faction. Please check faction name and try again.`',
 
 
 class Logger:
-    def __init__(self, name, formatter):
+    def __init__(self, name, file_handler, formatter, stream_handler):
         if not os.path.exists('Logs'):
             os.makedirs('Logs')
         self.logger = logging.getLogger(name)
         self.logger.setLevel(logging.DEBUG)
 
-        file_handler = handlers.TimedRotatingFileHandler(f'Logs/{name}.log', encoding='utf-8', when='D', backupCount=2)
         file_handler.setFormatter(formatter)
         self.logger.addHandler(file_handler)
 
-        stream_handler = logging.StreamHandler()
-        stream_handler.setFormatter(formatter)
-        self.logger.addHandler(stream_handler)
+        if stream_handler:
+            stream_handler = logging.StreamHandler()
+            stream_handler.setFormatter(formatter)
+            self.logger.addHandler(stream_handler)
 
 
-logger_dev_formatter = logging.Formatter('%(asctime)s : %(levelname)s : %(filename)s : %(funcName)s : %(message)s')
-logger_dev = Logger('dev', logger_dev_formatter)
+logger_dev = Logger('dev',
+                    handlers.TimedRotatingFileHandler(f'Logs/dev.log', when='midnight', backupCount=2, encoding='utf-8'),
+                    logging.Formatter('%(asctime)s : %(levelname)s : %(filename)s : %(funcName)s : %(message)s'),
+                    True)
 
-logger_usr_formatter = logging.Formatter('%(asctime)s : %(levelname)s : %(filename)s : %(funcName)s : %(message)s')
-logger_usr = Logger('usr', logger_usr_formatter)
+logger_usr = Logger('usr',
+                    handlers.RotatingFileHandler(f'Logs/usr.log', maxBytes=0, backupCount=2, encoding='utf-8'),
+                    logging.Formatter('%(asctime)s : %(message)s'),
+                    False)

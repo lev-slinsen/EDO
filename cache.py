@@ -15,7 +15,6 @@ log = s.logger_dev.logger
 class Cache:
     def __init__(self):
         self.stations = {}
-        log.debug('Cache initiated')
 
     @timer
     @bug_catcher
@@ -29,7 +28,8 @@ class Cache:
         self.conflicts_recovering = await self.get_conflicts_recovering(self.faction_data)
         self.unvisited_systems = await self.get_unvisited_systems(self.faction_data)
         self.ltd_systems = await self.get_ltd_systems()
-        log.debug('Cache updated')
+
+    '''Data gatherers that gather and process information for storage'''
 
     @bug_catcher
     async def faction_update(self):
@@ -94,7 +94,6 @@ class Cache:
                                     'loss': await self.stake_text(system['conflicts'][0]['stake']),
                                     'updated_ago': await self.updated_ago_text(system['updated_at'])
                                 }
-
         log.debug(f'report {report}')
         return report
 
@@ -163,7 +162,7 @@ class Cache:
         log.debug(f'report_sorted {report_sorted}')
         return report_sorted
 
-    "Text interpreters for human readable outputs"
+    '''Interpret that turn data into more easily digestible formats'''
 
     @bug_catcher
     async def updated_ago_text(self, updated_at_data):

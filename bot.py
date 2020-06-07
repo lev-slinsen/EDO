@@ -29,7 +29,8 @@ client = discord.Client()
 @bot.event
 @bug_catcher
 async def on_ready():
-    log_dev.debug(f'{bot.user.name} is alive!')
+    log_dev.debug(f"{'-'*20} {bot.user.name} is alive!")
+    log_usr.debug(f"{'-'*20} {bot.user.name} is alive!")
     for guild in bot.guilds:
         if guild.name is None:
             log_dev.critical(f'problem retrieving a guild')
@@ -39,24 +40,7 @@ async def on_ready():
     auto_report.report_loop.start()
 
 
-'''What I can do on my own'''
-
-
-@bug_catcher
-async def purge_own_messages(channel_to):
-    for message in await bot.get_channel(channel_to).history(limit=100).flatten():
-        if message.author == bot.user:
-            await message.delete()
-
-
-@bug_catcher
-async def purge_commands(channel_to):
-    for message in await bot.get_channel(channel_to).history(limit=100).flatten():
-        if message.content.startswith('!'):
-            await message.delete()
-
-
-'''What I remember'''
+'''My primary job'''
 
 
 class AutoReport:
@@ -65,11 +49,11 @@ class AutoReport:
         self.objectives = OrderedDict()
         self.comment = ''
         self.report_message_id = 0
-        log_dev.debug('AutoReport initialized')
 
     @tasks.loop(minutes=30)
     @bug_catcher
     async def report_loop(self):
+        log_dev.debug(f"started {'-' * 20}")
         await bot.get_channel(s.CHANNEL_ADMIN).send(f'`Updating report...`')
         self.cache = Cache()
         await self.cache.gather_data()
@@ -80,7 +64,7 @@ class AutoReport:
         await purge_own_messages(s.CHANNEL_ADMIN)
         await self.report_send()
         await purge_commands(s.CHANNEL_ADMIN)
-        # log_dev.debug(f"finished {'-'*20}")
+        # log_dev.debug(f"finished {'-' * 20}")
 
     @bug_catcher
     async def objectives_collect(self):
@@ -93,10 +77,13 @@ class AutoReport:
         for old_objective in self.objectives:
             if self.objectives[old_objective].status == 'active' and old_objective not in conflicts_active:
                 self.objectives.pop(old_objective)
+                log_usr.info(f'{self.objectives[old_objective].state} in {old_objective} is no longer active')
+
         for conflict in conflicts_active:
             if conflict not in self.objectives:
                 self.objectives[conflict] = Objective()
                 objective = self.objectives[conflict]
+
                 objective.status = 'active'
                 objective.state = conflicts_active[conflict]['state']
                 objective.opponent = conflicts_active[conflict]['opponent']
@@ -105,20 +92,39 @@ class AutoReport:
                 objective.win = conflicts_active[conflict]['win']
                 objective.loss = conflicts_active[conflict]['loss']
                 objective.updated_ago = conflicts_active[conflict]['updated_ago']
+
+                log_msg = f'new {objective.state} in {conflict}, opponent: {objective.opponent}'
+                if objective.win:
+                    log_msg += f', win stake: {objective.win}'
+                if objective.loss:
+                    log_msg += f', loss stake: {objective.loss}'
+                log_usr.info(log_msg)
             else:
                 objective = self.objectives[conflict]
-                objective.status = 'active'
+
+                if objective.status != 'active':
+                    objective.status = 'active'
+                    log_usr.info(f'{objective.state} in {objective} in now active')
+
                 if objective.score_us != conflicts_active[conflict]['score_us']:
+                    log_usr.info(f"our score in {objective} {objective.state} "
+                                 f"changed from {objective.score_us} to {conflicts_active[conflict]['score_us']}")
+
                     objective.new.append('score_us')
+                    objective.score_us = conflicts_active[conflict]['score_us']
                     if 'score_them' in objective.new:
                         objective.new.remove('score_them')
+
                 if objective.score_them != conflicts_active[conflict]['score_them']:
+                    log_usr.info(f"opponent's score in {objective} {objective.state} "
+                                 f"changed from {objective.score_them} to {conflicts_active[conflict]['score_them']}")
+
+                    objective.score_them = conflicts_active[conflict]['score_them']
                     objective.new.append('score_them')
                     if 'score_us' in objective.new:
                         objective.new.remove('score_us')
-                objective.score_us = conflicts_active[conflict]['score_us']
-                objective.score_them = conflicts_active[conflict]['score_them']
-                objective.updated_ago = conflicts_active[conflict]['updated_ago']
+
+            objective.updated_ago = conflicts_active[conflict]['updated_ago']
 
     async def report_pending(self, conflicts_pending):
         if s.DEBUG:
@@ -439,6 +445,23 @@ async def ltd(ctx):
 
     await ctx.channel.send(text)
     await purge_commands(ctx.channel.id)
+
+
+'''Message managing tools'''
+
+
+@bug_catcher
+async def purge_own_messages(channel_to):
+    for message in await bot.get_channel(channel_to).history(limit=100).flatten():
+        if message.author == bot.user:
+            await message.delete()
+
+
+@bug_catcher
+async def purge_commands(channel_to):
+    for message in await bot.get_channel(channel_to).history(limit=100).flatten():
+        if message.content.startswith('!'):
+            await message.delete()
 
 
 bot.run(s.TOKEN)

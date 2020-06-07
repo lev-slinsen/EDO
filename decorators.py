@@ -13,7 +13,7 @@ def timer(func):
         value = await func(*args, **kwargs)
         end_time = time.perf_counter()
         run_time = end_time - start_time
-        log.debug(f'{func.__name__} finished in {run_time}')
+        log.debug(f"{func.__name__} finished in {run_time}")
         return value
     return timer_d
 
