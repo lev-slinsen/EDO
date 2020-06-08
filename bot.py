@@ -2,8 +2,8 @@ import os
 from collections import OrderedDict
 
 import discord
-from discord.ext import commands
-from discord.ext import tasks
+from discord import File
+from discord.ext import commands, tasks
 
 import settings as s
 from cache import Cache
@@ -68,9 +68,9 @@ class AutoReport:
 
     @bug_catcher
     async def objectives_collect(self):
-        await self.report_pending(self.cache.conflicts_pending)
-        await self.report_active(self.cache.conflicts_active)
-        await self.report_recovering(self.cache.conflicts_recovering)
+        await self.report_pending(self.cache.pending)
+        await self.report_active(self.cache.active)
+        await self.report_recovering(self.cache.recovering)
 
     @bug_catcher
     async def report_pending(self, conflicts_pending):
@@ -236,7 +236,7 @@ class AutoReport:
             if objective.status in ('victory', 'defeat'):
                 report += await objective.conflict_recovering_text(objective_recovering)
 
-        report += await self.unvisited_systems(self.cache.unvisited_systems)
+        report += await self.unvisited_systems(self.cache.unvisited)
 
         await bot.get_channel(s.CHANNEL_ADMIN).send(report)
         log_dev.debug('finished successfully')
@@ -465,15 +465,15 @@ async def order(ctx, arg):
 @bug_catcher
 async def ltd(ctx):
     text = 'Best places to sell your :gem: (systems with best price are marked with :star:)\n'
-    if len(auto_report.cache.ltd_systems) == 0:
+    if len(auto_report.cache.ltd) == 0:
         text = '`No suitable systems at this moment`'
     else:
-        for distance in auto_report.cache.ltd_systems:
-            system = auto_report.cache.ltd_systems[distance]
+        for distance in auto_report.cache.ltd:
+            system = auto_report.cache.ltd[distance]
             system_name = system['system_name']
             if system['state'] == 'public_holiday':
                 system_name += ' :star:'
-            if len(auto_report.cache.ltd_systems) == 1:
+            if len(auto_report.cache.ltd) == 1:
                 text = f"There's a single suitable system: **{system['system_name']}** " \
                        f"over {distance} Ly from HQ, last updated {system['updated_ago']}\n"
             else:
@@ -481,6 +481,17 @@ async def ltd(ctx):
 
     await ctx.channel.send(text)
     await purge_commands(ctx.channel.id)
+
+
+@bot.command(name='log')
+@bug_catcher
+async def log(ctx):
+    result = []
+    for root, dirs, files in os.walk('Logs'):
+        for file in files:
+            if file.startswith('usr'):
+                await ctx.channel.send(file=File(f"Logs/{file}"))
+    return result
 
 
 '''Message managing tools'''

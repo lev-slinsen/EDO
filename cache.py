@@ -1,7 +1,5 @@
 import collections
-import datetime
-from datetime import datetime
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 import numpy as np
 
@@ -23,11 +21,11 @@ class Cache:
         if self.faction_data['error'] != 0:
             log.error(s.errors_text[0])
             return
-        self.conflicts_active = await self.get_conflicts_active(self.faction_data)
-        self.conflicts_pending = await self.get_conflicts_pending(self.faction_data)
-        self.conflicts_recovering = await self.get_conflicts_recovering(self.faction_data)
-        self.unvisited_systems = await self.get_unvisited_systems(self.faction_data)
-        self.ltd_systems = await self.get_ltd_systems()
+        self.active = await self.get_active(self.faction_data)
+        self.pending = await self.get_pending(self.faction_data)
+        self.recovering = await self.get_recovering(self.faction_data)
+        self.unvisited = await self.get_unvisited(self.faction_data)
+        # self.ltd = await self.get_ltd()
 
     '''Data gatherers that get information and process it for storage'''
 
@@ -41,7 +39,7 @@ class Cache:
         return data
 
     @bug_catcher
-    async def get_conflicts_active(self, faction_data):
+    async def get_active(self, faction_data):
         report = {}
         if not faction_data['docs']:
             return
@@ -76,7 +74,7 @@ class Cache:
         return report
 
     @bug_catcher
-    async def get_conflicts_pending(self, faction_data):
+    async def get_pending(self, faction_data):
         report = {}
         for system in faction_data['docs'][0]['faction_presence']:
             if system['conflicts']:
@@ -98,7 +96,7 @@ class Cache:
         return report
 
     @bug_catcher
-    async def get_conflicts_recovering(self, faction_data):
+    async def get_recovering(self, faction_data):
         report = {}
         for system in faction_data['docs'][0]['faction_presence']:
             if system['conflicts']:
@@ -130,10 +128,10 @@ class Cache:
         return report
 
     @bug_catcher
-    async def get_unvisited_systems(self, faction_data):
+    async def get_unvisited(self, faction_data):
         report = {2: [], 3: [], 4: [], 5: [], 6: [], 7: []}
         for system in faction_data['docs'][0]['faction_presence']:
-            if system['system_name'] not in {**self.conflicts_active, **self.conflicts_pending}:
+            if system['system_name'] not in {**self.active, **self.pending}:
                 system_updated_at = datetime.strptime(system['updated_at'][0:16], '%Y-%m-%dT%H:%M')
                 updated_ago = (s.frontier_time - s.frontier_tz.localize(system_updated_at))
 
@@ -147,12 +145,12 @@ class Cache:
         return report
 
     @bug_catcher
-    async def get_ltd_systems(self):
+    async def get_ltd(self):
         report = {}
         states = ('public holiday', 'pirate attack')
         for state in states:
             systems_full = await requests.eddb_pop_systems(state)
-            systems_short = await self.ltd_systems_text(state, systems_full)
+            systems_short = await self.ltd_text(state, systems_full)
             report.update(systems_short)
 
         report_sorted = collections.OrderedDict(sorted(report.items()))
@@ -230,7 +228,7 @@ class Cache:
         return text
 
     @bug_catcher
-    async def ltd_systems_text(self, state, data):
+    async def ltd_text(self, state, data):
         systems = {}
 
         for system in data:
