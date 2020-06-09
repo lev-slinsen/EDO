@@ -25,7 +25,7 @@ class Cache:
         self.pending = await self.get_pending(self.faction_data)
         self.recovering = await self.get_recovering(self.faction_data)
         self.unvisited = await self.get_unvisited(self.faction_data)
-        # self.ltd = await self.get_ltd()
+        self.ltd = await self.get_ltd()
 
     '''Data gatherers that get information and process it for storage'''
 
@@ -44,6 +44,8 @@ class Cache:
         if not faction_data['docs']:
             return
         for system in faction_data['docs'][0]['faction_presence']:
+
+            # Adds systems with an active conflict
             if system['conflicts']:
                 if system['conflicts'][0]['status'] == 'active':
                     system_name_lower = system['system_name_lower']
@@ -70,6 +72,15 @@ class Cache:
                                 'loss': await self.stake_text(conflict[us]['stake']),
                                 'updated_ago': await self.updated_ago_text(system['updated_at'])
                             }
+
+            # Adds systems in active retreat
+            for state in system['active_states']:
+                if state == 'retreat':
+                    report[system['system_name']] = {
+                        'state': 'retreat',
+                        'updated_ago': await self.updated_ago_text(system['updated_at'])
+                    }
+
         log.debug(f'report {report}')
         return report
 
@@ -77,6 +88,8 @@ class Cache:
     async def get_pending(self, faction_data):
         report = {}
         for system in faction_data['docs'][0]['faction_presence']:
+
+            # Adds systems with a pending conflict
             if system['conflicts']:
                 if system['conflicts'][0]['status'] == 'pending':
                     opponent_name = system['conflicts'][0]['opponent_name']
@@ -92,6 +105,15 @@ class Cache:
                                     'loss': await self.stake_text(system['conflicts'][0]['stake']),
                                     'updated_ago': await self.updated_ago_text(system['updated_at'])
                                 }
+
+            # Adds systems with retreat pending
+            for state in system['pending_states']:
+                if state == 'retreat':
+                    report[system['system_name']] = {
+                        'state': 'retreat',
+                        'updated_ago': await self.updated_ago_text(system['updated_at'])
+                    }
+
         log.debug(f'report {report}')
         return report
 
@@ -99,8 +121,8 @@ class Cache:
     async def get_recovering(self, faction_data):
         report = {}
         for system in faction_data['docs'][0]['faction_presence']:
-            if system['conflicts']:
-                if system['conflicts'][0]['status'] in ('recovering', ''):
+            for state in system['recovering_states']:
+                if state in ('war', 'civil war', 'election'):
                     opponent_name = system['conflicts'][0]['opponent_name']
                     opp_faction_data = await requests.edbgs_faction(opponent_name)
 
@@ -121,9 +143,12 @@ class Cache:
                                     'state': system['conflicts'][0]['type'],
                                     'status': status,
                                     'stake': await self.stake_text(stake),
-                                    'updated_ago': await self.updated_ago_text(system['updated_at'])
                                 }
-
+                elif state == 'retreat':
+                    report[system['system_name']] = {
+                        'state': 'retreat',
+                        'status': '',
+                    }
         log.debug(f'report {report}')
         return report
 

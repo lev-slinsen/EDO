@@ -12,10 +12,10 @@ from decorators import bug_catcher
 # TODO: check for number of symbols in report (max 2000)
 # TODO: add reaction mechanics
 # TODO: add links to systems and stations on EDDB or Inara
-# TODO: add retreat tracking
 # TODO: add ignore command to delete unwanted system from objectives
 # TODO: put LTD systems report on a different, less frequent loop
-# TODO: allow user log download
+# TODO: check for systems that joined or were lost
+# TODO: move Objective to cache.py to optimize the pipeline
 
 log_dev = s.logger_dev.logger
 log_usr = s.logger_usr.logger
@@ -68,38 +68,9 @@ class AutoReport:
 
     @bug_catcher
     async def objectives_collect(self):
-        await self.report_pending(self.cache.pending)
         await self.report_active(self.cache.active)
+        await self.report_pending(self.cache.pending)
         await self.report_recovering(self.cache.recovering)
-
-    @bug_catcher
-    async def report_pending(self, conflicts_pending):
-        for old_objective in self.objectives:
-            if self.objectives[old_objective].status == 'pending' and old_objective not in conflicts_pending:
-                self.objectives.pop(old_objective)
-                log_usr.info(f'{self.objectives[old_objective].state} in {old_objective} is no longer pending')
-
-        for conflict in conflicts_pending:
-            if conflict not in self.objectives:
-                self.objectives[conflict] = Objective()
-                objective = self.objectives[conflict]
-                objective.status = 'pending'
-                objective.state = conflicts_pending[conflict]['state']
-                objective.opponent = conflicts_pending[conflict]['opponent']
-                objective.win = conflicts_pending[conflict]['win']
-                objective.loss = conflicts_pending[conflict]['loss']
-                objective.updated_ago = conflicts_pending[conflict]['updated_ago']
-
-                log_msg = f'pending {objective.state} in {conflict}, opponent: {objective.opponent}'
-                if objective.win:
-                    log_msg += f', win stake: {objective.win}'
-                if objective.loss:
-                    log_msg += f', loss stake: {objective.loss}'
-                log_usr.info(log_msg)
-            else:
-                objective = self.objectives[conflict]
-                objective.updated_ago = conflicts_pending[conflict]['updated_ago']
-        log_dev.debug('finished successfully')
 
     @bug_catcher
     async def report_active(self, conflicts_active):
@@ -115,51 +86,94 @@ class AutoReport:
 
                 objective.status = 'active'
                 objective.state = conflicts_active[conflict]['state']
-                objective.opponent = conflicts_active[conflict]['opponent']
-                objective.score_us = conflicts_active[conflict]['score_us']
-                objective.score_them = conflicts_active[conflict]['score_them']
-                objective.win = conflicts_active[conflict]['win']
-                objective.loss = conflicts_active[conflict]['loss']
                 objective.updated_ago = conflicts_active[conflict]['updated_ago']
 
-                log_msg = f'{objective.state} in now active in {conflict}, opponent: {objective.opponent}'
-                if objective.win:
-                    log_msg += f', win stake: {objective.win}'
-                if objective.loss:
-                    log_msg += f', loss stake: {objective.loss}'
-                log_usr.info(log_msg)
+                if conflicts_active[conflict]['state'] in ('war', 'civil war', 'election'):
+                    objective.opponent = conflicts_active[conflict]['opponent']
+                    objective.score_us = conflicts_active[conflict]['score_us']
+                    objective.score_them = conflicts_active[conflict]['score_them']
+                    objective.win = conflicts_active[conflict]['win']
+                    objective.loss = conflicts_active[conflict]['loss']
+
+                    log_msg = f'{objective.state} in now active in {conflict}, opponent: {objective.opponent}'
+                    if objective.win:
+                        log_msg += f', win stake: {objective.win}'
+                    if objective.loss:
+                        log_msg += f', loss stake: {objective.loss}'
+                    log_usr.info(log_msg)
+
+                elif conflicts_active[conflict]['state'] == 'retreat':
+                    log_usr.info(f'we are in retreat from {objective}')
+            else:
+                objective = self.objectives[conflict]
+                if conflicts_active[conflict]['state'] in ('war', 'civil war', 'election'):
+                    score_us = conflicts_active[conflict]['score_us']
+                    if objective.score_us != score_us:
+                        log_usr.info(f"our score in {objective} {objective.state} "
+                                     f"changed from {objective.score_us} to {score_us}")
+                        objective.new.append('score_us')
+                        objective.score_us = score_us
+                        if 'score_them' in objective.new:
+                            objective.new.remove('score_them')
+
+                    score_them = conflicts_active[conflict]['score_them']
+                    if objective.score_them != score_them:
+                        log_usr.info(f"opponent's score in {objective} {objective.state} "
+                                     f"changed from {objective.score_them} to {score_them}")
+                        objective.score_them = score_them
+                        objective.new.append('score_them')
+                        if 'score_us' in objective.new:
+                            objective.new.remove('score_us')
+                elif conflicts_active[conflict]['state'] == 'retreat':
+                    objective.updated_ago = conflicts_active[conflict]['updated_ago']
+
+            objective.updated_ago = conflicts_active[conflict]['updated_ago']
+        log_dev.debug('finished successfully')
+
+    @bug_catcher
+    async def report_pending(self, conflicts_pending):
+        for old_objective in self.objectives:
+            if self.objectives[old_objective].status == 'pending' and old_objective not in conflicts_pending:
+                self.objectives.pop(old_objective)
+                log_usr.info(f'{self.objectives[old_objective].state} in {old_objective} is no longer pending')
+
+        for conflict in conflicts_pending:
+            if conflict not in self.objectives:
+                self.objectives[conflict] = Objective()
+                objective = self.objectives[conflict]
+
+                objective.status = 'pending'
+                objective.state = conflicts_pending[conflict]['state']
+
+                if conflicts_pending[conflict]['state'] in ('war', 'civil war', 'election'):
+                    objective.status = 'pending'
+                    objective.state = conflicts_pending[conflict]['state']
+                    objective.opponent = conflicts_pending[conflict]['opponent']
+                    objective.win = conflicts_pending[conflict]['win']
+                    objective.loss = conflicts_pending[conflict]['loss']
+                    objective.updated_ago = conflicts_pending[conflict]['updated_ago']
+
+                    log_msg = f'pending {objective.state} in {conflict}, opponent: {objective.opponent}'
+                    if objective.win:
+                        log_msg += f', win stake: {objective.win}'
+                    if objective.loss:
+                        log_msg += f', loss stake: {objective.loss}'
+                    log_usr.info(log_msg)
+
+                elif conflicts_pending[conflict]['state'] == 'retreat':
+                    log_usr.info(f'pending retreat from {objective}')
+
             else:
                 objective = self.objectives[conflict]
 
-                if objective.status != 'active':
-                    objective.status = 'active'
-                    log_usr.info(f'{objective.state} in {objective} in now active')
-
-                if objective.score_us != conflicts_active[conflict]['score_us']:
-                    log_usr.info(f"our score in {objective} {objective.state} "
-                                 f"changed from {objective.score_us} to {conflicts_active[conflict]['score_us']}")
-
-                    objective.new.append('score_us')
-                    objective.score_us = conflicts_active[conflict]['score_us']
-                    if 'score_them' in objective.new:
-                        objective.new.remove('score_them')
-
-                if objective.score_them != conflicts_active[conflict]['score_them']:
-                    log_usr.info(f"opponent's score in {objective} {objective.state} "
-                                 f"changed from {objective.score_them} to {conflicts_active[conflict]['score_them']}")
-
-                    objective.score_them = conflicts_active[conflict]['score_them']
-                    objective.new.append('score_them')
-                    if 'score_us' in objective.new:
-                        objective.new.remove('score_us')
-            objective.updated_ago = conflicts_active[conflict]['updated_ago']
+            objective.updated_ago = conflicts_pending[conflict]['updated_ago']
         log_dev.debug('finished successfully')
 
     @bug_catcher
     async def report_recovering(self, conflicts_recovering):
         for old_objective in self.objectives:
             if (
-                    self.objectives[old_objective].status in ('defeat', 'victory') and
+                    self.objectives[old_objective].status in ('defeat', 'victory', '') and
                     old_objective not in conflicts_recovering
             ):
                 self.objectives.pop(old_objective)
@@ -170,20 +184,22 @@ class AutoReport:
             if conflict not in self.objectives:
                 self.objectives[conflict] = Objective()
                 objective = self.objectives[conflict]
-                objective.status = conflicts_recovering[conflict]['status']
-                objective.state = conflicts_recovering[conflict]['state']
-                objective.win = conflicts_recovering[conflict]['stake']
-                objective.updated_ago = conflicts_recovering[conflict]['updated_ago']
 
-                log_msg = f'recovering from {objective.state} in {conflict}'
-                if objective.status == 'victory':
-                    log_msg += f', we won: {objective.win}'
-                elif objective.status == 'defeat':
-                    log_msg += f', we lost: {objective.win}'
-                log_usr.info(log_msg)
-            else:
-                objective = self.objectives[conflict]
-                objective.updated_ago = conflicts_recovering[conflict]['updated_ago']
+                objective.state = conflicts_recovering[conflict]['state']
+                objective.status = conflicts_recovering[conflict]['status']
+
+                if conflicts_recovering[conflict]['state'] in ('war', 'civil war', 'election'):
+                    objective.state = conflicts_recovering[conflict]['state']
+                    objective.win = conflicts_recovering[conflict]['stake']
+
+                    log_msg = f'recovering from {objective.state} in {conflict}'
+                    if objective.status == 'victory':
+                        log_msg += f', we won: {objective.win}'
+                    elif objective.status == 'defeat':
+                        log_msg += f', we lost: {objective.win}'
+                    log_usr.info(log_msg)
+                elif conflicts_recovering[conflict]['state'] == 'retreat':
+                    log_usr.info('')
         log_dev.debug('finished successfully')
 
     @bug_catcher
@@ -220,7 +236,7 @@ class AutoReport:
         for objective_active in self.objectives:
             objective = self.objectives[objective_active]
             if objective.status == 'active':
-                report += await objective.conflict_active_text(num, objective_active)
+                report += await objective.active_text(num, objective_active)
                 num += 1
             elif objective.status == 'event':
                 report += f'{s.number_emoji[num]} {objective.text}\n\n'
@@ -229,12 +245,12 @@ class AutoReport:
         for objective_pending in self.objectives:
             objective = self.objectives[objective_pending]
             if objective.status == 'pending':
-                report += await objective.conflict_pending_text(objective_pending)
+                report += await objective.pending_text(objective_pending)
 
         for objective_recovering in self.objectives:
             objective = self.objectives[objective_recovering]
             if objective.status in ('victory', 'defeat'):
-                report += await objective.conflict_recovering_text(objective_recovering)
+                report += await objective.recovering_text(objective_recovering)
 
         report += await self.unvisited_systems(self.cache.unvisited)
 
@@ -257,7 +273,7 @@ class Objective:
         self.new = []
 
     @bug_catcher
-    async def conflict_active_text(self, num, system_name):
+    async def active_text(self, num, system_name):
         text = '{0} {1} in **{2}**\n' \
                '> {3} [ {4} - {5} ] {6}\n'.format(
             s.number_emoji[num],
@@ -282,8 +298,8 @@ class Objective:
         return text
 
     @bug_catcher
-    async def conflict_pending_text(self, system_name):
-        text = f':arrow_up: *Pending* {self.state} in {system_name}.\n' \
+    async def pending_text(self, system_name):
+        text = f':arrow_up: *Pending* {self.state} in {system_name}\n' \
                f'> Opponent: {self.opponent}\n'
         if self.win:
             text += f'> On victory we gain: *{self.win}*\n'
@@ -295,8 +311,8 @@ class Objective:
         return text
 
     @bug_catcher
-    async def conflict_recovering_text(self, system_name):
-        text = f':arrow_down: *Recovering* from {self.state} in {system_name}.\n'
+    async def recovering_text(self, system_name):
+        text = f':arrow_down: *Recovering* from {self.state} in {system_name}\n'
         if self.status == 'victory':
             if self.win:
                 text += f'> We won *{self.win}*\n\n'
