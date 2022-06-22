@@ -4,4 +4,4 @@ python-dotenv==0.13.0
 pytz==2020.1
 requests==2.23.0
 discord==1.0.1
-numpy==1.18.5
+numpy==1.22.0
